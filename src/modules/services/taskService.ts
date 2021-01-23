@@ -8,12 +8,15 @@ import RpcService from './rpcService'
 import DealService from './dealService'
 import MatcherService from './matcherService'
 import TransactionService from './transactionService'
-import { LiquidityAddReq } from '../models/liquidityAddReq'
-import { LiquidityRemoveReq } from '../models/liquidityRemoveReq'
-import { SwapReq } from '../models/swapReq'
-import { Info } from '../models/info'
-import { Pool } from '../models/pool'
-import { MatcherChange } from '../models/matcherChange'
+import { Info } from '../models/cells/info'
+import { Pool } from '../models/cells/pool'
+import { MatcherChange } from '../models/cells/matcherChange'
+import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
+import { LiquidityRemoveTransformation } from '../models/transformation/liquidityRemoveTransformation'
+import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
+import { LiquidityMatch } from '../models/matches/liquidityMatch'
+import { SwapMatch } from '../models/matches/swapMatch'
+import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 
 const logTag = `\x1b[35m[Tasks Service]\x1b[0m`
 
@@ -73,16 +76,21 @@ export default class TaskService {
     //
     //
     // 2. if the latest info cell is in the 'Sent' deal, which means we dominate,
+    // thus we should check all sent txs in the database. for all sent txs in time order
+    //   -> if all request in a txs is still available on chain, we resend the tx
+    //   -> if at least one of the request is missing, which means client cancelled the request,
+    //      we should drop the tx and txs follows it, and then do a new matching job
+    // at last, if all txs is fine and re-send and there has more requests left, do a new matching job
     // thus set all previous deal tx to committed, as the state transfer make sure that they must be committed
     // and then based on the last 'Sent' deal tx, do match job.
     // Do re-send the 'Sent' deal txs in case of they are somehow dropped by miner. we could ignore pending state
     // and force re-send again :)
 
-    let [addReqs, removeReqs, swapReqs, info, pool, matcherChange] = await this.#scanService.scanAll()
+    let [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = await this.#scanService.scanAll()
 
     // use the info's outpoint to search our db
     // the result may be null, may present with Committed, or may present with Sent
-    const dealRes: Deal | null = await this.#dealService.getByTxHash(info.txHash)
+    const dealRes: Deal | null = await this.#dealService.getByTxHash(info.outPoint.tx_hash)
 
     if (!dealRes) {
       // the info is not in our deal, some one cuts off our deals
@@ -96,131 +104,158 @@ export default class TaskService {
           deal.txHash,
         )
         // get all status of our sent deal txs and update them
+        // some maybe set to committed
+        // some maybe set to cut-off
         let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
-        this.#dealService.updateDealStatus(sentDealsStatus)
+        this.#dealService.updateDealsStatus(sentDealsStatus)
       }
 
       // based on the current situation, do a new matching job
 
-      await this.handler(addReqs, removeReqs,swapReqs,info,pool,matcherChange)
+      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
 
     } else {
       // the info is in our deal tx, we dominate the matching
 
+      // 1st, the deals includes the info.txHash and all previous is definitely committed
       // update all the tx and its pre-txs to committed
       this.#dealService.updateDealTxsChainsToCommited(dealRes)
 
-      // get the latest sent deal by sort 'id'
+      // 2nd, get the latest sent deal by sort 'id'
       let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
 
-      if (!sentDeals.length) {
-        // if there are Sent txs, we should base on it to compose new deal
-        // now we filter all handled reqs
+      // now we check Sent deals one by one to see if any input req are used by users
 
-        let allReqs: Array<string> = sentDeals.flatMap(deal => deal.reqOutpoints.split(','))
+      // map into the outpoint
+      let xformReqOutpoints = [addXforms, removeXforms, buyXforms, sellXforms].flatMap(xforms => { // @ts-ignore
+          return xforms.map(xform => xform.request.getOutPoint)
+        },
+      )
 
-        addReqs = addReqs.filter(addReq => {
-          !allReqs.includes(addReq.outPoint)
-        })
-        removeReqs = removeReqs.filter(removeReq => {
-          !allReqs.includes(removeReq.outPoint)
-        })
-        swapReqs = swapReqs.filter(swapReq => {
-          !allReqs.includes(swapReq.outPoint)
-        })
+      let drop = false
+      for (let sentDeal of sentDeals) {
+        if (drop) {
+          this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
+          continue
+        }
 
-        info = JSON.parse(sentDeals[0].info)
-        pool = JSON.parse(sentDeals[0].pool)
-        matcherChange = JSON.parse(sentDeals[0].matcher_change)
+        let fine = true
+        let sentReqOutpoints: Array<string> = sentDeal.reqOutpoints.split(',')
 
-        // now do the matching job
 
-        await this.handler(addReqs,removeReqs,swapReqs,info,pool,matcherChange)
+        for (let sentReqOutpoint of sentReqOutpoints) {
+          if (!xformReqOutpoints.includes(sentReqOutpoint)) {
+            // the req is used buy client
+            fine = false
+            break
+          }
+        }
+
+        if (fine) {
+          // re-send the deal tx and remove those reqs in the request list
+          await this.#rpcService.sendTransaction(JSON.parse(sentDeal.tx))
+
+          addXforms = addXforms.filter(addXform =>
+            !sentReqOutpoints.includes(addXform.request.getOutPoint()),
+          )
+          removeXforms = removeXforms.filter(removeXform =>
+            !sentReqOutpoints.includes(removeXform.request.getOutPoint()),
+          )
+          buyXforms = buyXforms.filter(buyXform =>
+            !sentReqOutpoints.includes(buyXform.request.getOutPoint()),
+          )
+          sellXforms = sellXforms.filter(sellXform =>
+            !sentReqOutpoints.includes(sellXform.request.getOutPoint()),
+          )
+        } else {
+          // cut off this deal tx and those following it, do a new match
+          this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
+          drop = true
+        }
       }
+      // now do the matching job
+      // if some deals is cut off, there likely to be a new match (reqs in the deals still remains), maybe not
+      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
     }
   }
 
 
-  handler = async (addReqs: Array<LiquidityAddReq>,
-             removeReqs: Array<LiquidityRemoveReq>,
-             swapReqs: Array<SwapReq>,
-             info: Info,
-             pool: Pool,
-             matcherChange: MatcherChange) => {
+  handler = async (addXforms: Array<LiquidityAddTransformation>,
+                   removeXforms: Array<LiquidityRemoveTransformation>,
+                   swapBuyforms: Array<SwapBuyTransformation>,
+                   swapSellXforms: Array<SwapSellTransformation>,
+                   info: Info,
+                   pool: Pool,
+                   matcherChange: MatcherChange) => {
 
-    let resLiquidity = this.#matcherService.matchLiquidity(removeReqs, addReqs, info, pool, matcherChange)
+    let liquidityMatch: LiquidityMatch = new LiquidityMatch(
+      info,
+      pool,
+      matcherChange,
+      addXforms,
+      removeXforms,
+    )
+    this.#matcherService.matchLiquidity(liquidityMatch)
 
-    // the results of liquidity matching job, to be used to swap matching job
-    let rawTx2, txHash2, info2, pool2, matcherChange2
-    // compose tx, and then use new updated info, pool and matcher from new cell
-    let composeRes2 = this.#transactionService.composeLiquidityTransaction(
-      resLiquidity[0],
-      resLiquidity[1],
-      resLiquidity[2],
-      resLiquidity[3],
-      resLiquidity[4])
-    if (composeRes2 == null) {
-      // no tx composed, have to skip
-      [rawTx2, txHash2, info2, pool2, matcherChange2] = [null, null, info, pool, matcherChange]
-    } else {
-      [rawTx2, txHash2, info2, pool2, matcherChange2] = composeRes2!
-      // save to db
+    let newInfo, newPool, newMatcherChange
+    [newInfo, newPool, newMatcherChange] = this.#transactionService.composeLiquidityTransaction(liquidityMatch)
+
+    if(!liquidityMatch.skip){
       let outpointsProcessed: Array<string> = []
-      outpointsProcessed = outpointsProcessed.concat(removeReqs.map(req => req.outPoint))
-      outpointsProcessed = outpointsProcessed.concat(addReqs.map(req => req.outPoint))
+      outpointsProcessed = outpointsProcessed.concat(liquidityMatch.addXforms.map(xform  => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(liquidityMatch.removeXforms.map(xform  => xform.request.getOutPoint()))
 
-      const deal2: Omit<Deal, 'createdAt' | 'id'> = {
-        txHash: txHash2,
-        preTxHash: info.rawCell.out_point?.tx_hash!,
-        tx: JSON.stringify(rawTx2),
-        info: JSON.stringify(info2),
-        pool: JSON.stringify(pool2),
-        matcher_change: JSON.stringify(matcherChange2),
+      const deal: Omit<Deal, 'createdAt' | 'id'> = {
+        txHash: liquidityMatch.composedTxHash!,
+        preTxHash: liquidityMatch.info.outPoint.tx_hash,
+        tx: JSON.stringify(liquidityMatch.composedTx),
+        info: JSON.stringify(liquidityMatch.info),
+        pool: JSON.stringify(liquidityMatch.pool),
+        matcherChange: JSON.stringify(liquidityMatch.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
-      await this.#dealService.saveDeal(deal2)
+      await this.#dealService.saveDeal(deal)
 
-      // send tx
-      await this.#rpcService.sendTransaction(rawTx2)
+      await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
     }
 
 
-    let resSwap = this.#matcherService.matchSwap(swapReqs, info2, pool2, matcherChange2)
 
-    let composeRes3 = this.#transactionService.composeSwapTransaction(
-      resSwap[0],
-      resSwap[1],
-      resSwap[2],
-      resSwap[3],
+
+    // the info, pool, and matcherChange should base on liquidity tx
+    // if the liquidity match is skipped, the info, pool and matcherChange should not be modified
+    let swapMatch: SwapMatch = new SwapMatch(
+      newInfo,
+      newPool,
+      newMatcherChange,
+      swapBuyforms,
+      swapSellXforms,
     )
-    if (composeRes3 == null) {
-      // no tx composed, have to skip
-      // do nothing
-    } else {
-      let rawTx3, txHash3, info3, pool3, matcherChange3
-      [rawTx3, txHash3, info3, pool3, matcherChange3] = composeRes3!
 
-      // save to db
-      // send to
-      // save to db
+    this.#matcherService.matchSwap(swapMatch)
+
+
+    this.#transactionService.composeSwapTransaction(swapMatch)
+
+    if(!swapMatch.skip){
       let outpointsProcessed: Array<string> = []
-      outpointsProcessed = outpointsProcessed.concat(swapReqs.map(req => req.outPoint))
+      outpointsProcessed = outpointsProcessed.concat(swapMatch.buyXforms.map(xform  => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(swapMatch.sellXforms.map(xform  => xform.request.getOutPoint()))
 
-      const deal3: Omit<Deal, 'createdAt' | 'id'> = {
-        txHash: txHash3,
-        preTxHash: info2.rawCell.out_point?.tx_hash!,
-        tx: JSON.stringify(rawTx3),
-        info: JSON.stringify(info3),
-        pool: JSON.stringify(pool3),
-        matcher_change: JSON.stringify(matcherChange3),
+      const deal: Omit<Deal, 'createdAt' | 'id'> = {
+        txHash: swapMatch.composedTxHash!,
+        preTxHash: swapMatch.info.outPoint.tx_hash,
+        tx: JSON.stringify(swapMatch.composedTx),
+        info: JSON.stringify(swapMatch.info),
+        pool: JSON.stringify(swapMatch.pool),
+        matcherChange: JSON.stringify(swapMatch.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
-      await this.#dealService.saveDeal(deal3)
+      await this.#dealService.saveDeal(deal)
 
-      // send tx
-      await this.#rpcService.sendTransaction(rawTx3)
+      await this.#rpcService.sendTransaction(swapMatch.composedTx!)
     }
 
   }

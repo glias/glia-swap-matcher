@@ -38,8 +38,8 @@ export class Deal {
   pool!: string
 
   // the matcher_change_cell this deal finishes, in JSON format
-  @Column('varchar',{name:'matcher_change'})
-  matcher_change!: string
+  @Column('varchar',{name:'matcherChange'})
+  matcherChange!: string
 
 
   //处理了哪些req,[xxxx-x,xxxx-x,xxxx-x]

@@ -1,16 +1,13 @@
 import { injectable } from 'inversify'
-import { LiquidityRemoveReq } from '../models/liquidityRemoveReq'
-import { Info } from '../models/info'
-import { Pool } from '../models/pool'
-import { Sudt } from '../models/sudt'
-import { Ckb } from '../models/ckb'
-import { SwapReq } from '../models/swapReq'
-import { LiquidityAddReq } from '../models/liquidityAddReq'
-import { LiquidityRemoveRes } from '../models/liquidityRemoveRes'
-import { LiquidityAddRes } from '../models/liquidityAddRes'
-import { MatcherChange } from '../models/matcherChange'
-import { SwapRes } from '../models/swapRes'
-import { Lpt } from '../models/lpt'
+import { Sudt } from '../models/cells/sudt'
+import { Ckb } from '../models/cells/ckb'
+import { LiquidityRemoveTransformation } from '../models/transformation/liquidityRemoveTransformation'
+import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
+import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
+import { Lpt } from '../models/cells/lpt'
+import { LiquidityMatch } from '../models/matches/liquidityMatch'
+import { SwapMatch } from '../models/matches/swapMatch'
+import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 
 
 @injectable()
@@ -21,137 +18,125 @@ export default class MatcherService {
 
   }
 
+  // the context inside of SwapMatch is updated during processing match
+  matchSwap = (swapMatch: SwapMatch):void =>{
+    for(let buyXform of swapMatch.buyXforms){
+        this.processSwapBuyTransformation(swapMatch,buyXform)
+    }
+
+    for(let sellXform of swapMatch.sellXforms){
+      this.processSwapSellTransformation(swapMatch,sellXform)
+    }
+
+    if(swapMatch.buyXforms.every(xform => xform.skip) &&
+      swapMatch.sellXforms.every(xform => xform.skip)
+    ){
+      swapMatch.skip = true
+    }else{
+      swapMatch.matcherChange.reduceBlockMinerFee()
+    }
+  }
+
+
   /*
   info -> info
   pool -> pool
-  matcherChange -> matcherChange
-  [swapReq] -> [sudtChangeAmount/ckb]
-   */
-  matchSwap = (
-    swapReqs:Array<SwapReq>,
-    info:Info,
-    pool:Pool,
-    matcherChange:MatcherChange)
-    : [Array<SwapRes>,Info,Pool,MatcherChange] => {
+  matcherChange_ckb -> matcherChange_ckb
+  swap_buy -> sudt
 
-    let swapResults : Array<SwapRes> = []
-    for(let swapReq of swapReqs){
-      let res = this.calcSwapReq(swapReq,matcherChange,info,pool)
-      if(!res){
-        continue
-      }
-      let swapRes : SwapRes
-      [swapRes,matcherChange,info,pool] = res
+  buy = buy sudt
+  ckb -> sudt
+ */
+  processSwapBuyTransformation = (swapMatch:SwapMatch,swapBuyXform:SwapBuyTransformation):void =>{
+    // spend ckb to get sudt
+    // ckb -> sudt
 
-      // update SwapReq infomation into Sudt|Ckb
-
-      swapResults.push(swapRes)
+    // since you can not spend all ckb because we need some to hold the output sudt cell
+    if( swapBuyXform.request.capacity - swapBuyXform.request.tips <= SwapBuyTransformation.SUDT_FIXED_CAPACITY){
+      swapBuyXform.skip = true
+      return
     }
-    return [swapResults,info,pool,matcherChange]
+
+    // the formula is as same as before :0
+    // (ckb_reserve  + spent_ckb * 99.7% ) (sudt_reserve - sudt_got) <= sudt_reserve * ckb_reserve
+    // ckb_reserve * - sudt_got + spent_ckb * 99.7% * sudt_reserve + spent_ckb * 99.7% * - sudt_got <=0
+    // spent_ckb * 99.7% * sudt_reserve <= ckb_reserve * sudt_got + spent_ckb * 99.7% * sudt_got
+    // spent_ckb * 99.7% * sudt_reserve <= (ckb_reserve + spent_ckb * 99.7% )* sudt_got
+    // spent_ckb * 997 * sudt_reserve <= (ckb_reserve * 1000 + spent_ckb * 997 )* sudt_got
+    // sudt_got >= spent_ckb * 997 * sudt_reserve / (ckb_reserve * 1000 + spent_ckb * 997 )
+
+    let ckbIn = swapBuyXform.request.capacity -swapBuyXform.request.tips - SwapBuyTransformation.SUDT_FIXED_CAPACITY
+
+    let sudtGot = ckbIn*997n*swapMatch.info.sudtReserve / (swapMatch.info.ckbReserve*1000n+  ckbIn*997n)
+
+    if(sudtGot < swapBuyXform.request.amountOutMin){
+      swapBuyXform.skip = true
+      return
+    }
+
+    // flush the result into Xform
+    swapBuyXform.sudtAmount = sudtGot
+
+    // update context of swapMatch
+    // matcher get tips
+    swapMatch.matcherChange.capacity += swapBuyXform.request.tips
+
+    // then all ckb, include of 0.3% as liquidity provider interest, goes into pool
+    swapMatch.info.ckbReserve += ckbIn
+    swapMatch.info.sudtReserve -= sudtGot;
+
+    swapMatch.pool.capacity += ckbIn
+    swapMatch.pool.sudtAmount -= sudtGot;
   }
 
   /*
-    1/1000's input ckb/sudtChangeAmount goes to matcher
-    2/1000's input goes to pool
-    user use 997/1000's input to do the swap actually
+  info -> info
+  pool -> pool
+  matcherChange_ckb -> matcherChange_ckb
+  swap_sell -> ckb
+
+  sell = sell sudt
+  sudt -> ckb
   */
-  calcSwapReq = (swapReq:SwapReq, matcherChange:MatcherChange ,info:Info,pool:Pool)
-    :[SwapRes,MatcherChange,Info,Pool]|null =>{
-    let swapRes : SwapRes
-    /*
-    swap_order_cell  ->  ckb_cell
-     */
-    if(swapReq.swapType === 'buy'){
-      // spend sudtChangeAmount to get ckb
-      // sudtChangeAmount -> ckb
+  processSwapSellTransformation = (swapMatch:SwapMatch,swapSellXform:SwapSellTransformation) :void =>{
+    // spend sudt to get ckb
+    // sudt -> ckb
 
-      // (sudt_reserve + spent_sudt * 99.7%)(ckb_reserve - ckb_got) <= sudt_reserve * ckb_reserve
-      // sudt_reserve * - ckb_got + spent_sudt * 99.7% * ckb_reserve + spent_sudt * 99.7% * - ckb_got <=0
-      // spent_sudt * 99.7% * ckb_reserve <= sudt_reserve * ckb_got + spent_sudt * 99.7% * ckb_got
-      // spent_sudt * 99.7% * ckb_reserve <= (sudt_reserve + spent_sudt * 99.7% )* ckb_got
-      // spent_sudt * 997 * ckb_reserve <= (sudt_reserve * 1000 + spent_sudt * 997 )* ckb_got
-      // ckb_got >= spent_sudt * 997 * ckb_reserve / (sudt_reserve * 1000 + spent_sudt * 997 )
+    // (sudt_reserve + spent_sudt * 99.7%)(ckb_reserve - ckb_got) <= sudt_reserve * ckb_reserve
+    // sudt_reserve * - ckb_got + spent_sudt * 99.7% * ckb_reserve + spent_sudt * 99.7% * - ckb_got <=0
+    // spent_sudt * 99.7% * ckb_reserve <= sudt_reserve * ckb_got + spent_sudt * 99.7% * ckb_got
+    // spent_sudt * 99.7% * ckb_reserve <= (sudt_reserve + spent_sudt * 99.7% )* ckb_got
+    // spent_sudt * 997 * ckb_reserve <= (sudt_reserve * 1000 + spent_sudt * 997 )* ckb_got
+    // ckb_got >= spent_sudt * 997 * ckb_reserve / (sudt_reserve * 1000 + spent_sudt * 997 )
 
-      let ckbOut : bigint = swapReq.sudtIn*997n*info.ckbReserve / (info.sudtReserve*1000n+  swapReq.sudtIn*997n)
+    let ckbOut : bigint = swapSellXform.request.sudtAmount*997n*swapMatch.info.ckbReserve /
+      (swapMatch.info.sudtReserve*1000n+   swapSellXform.request.sudtAmount*997n)
 
 
-
-      if(ckbOut < swapReq.ckbOutMin){
-        return null
-      }
-
-      if((ckbOut + swapReq.capacity < Ckb.CKB_FIXED_CAPACITY)){
-        // this shouldn't happen
-        return null
-      }
-      swapReq.ckbOut = ckbOut
-
-      // the matcher got 0.1% input, floor it
-      let sudtProfit = swapReq.sudtAmount/1000n
-      matcherChange.sudtAmount += sudtProfit
-
-      // then all remaining sudtChangeAmount, include of 0.2% as liquidity provider interest, goes into pool
-      info.sudtReserve += swapReq.sudtAmount - sudtProfit;
-      info.ckbReserve -= ckbOut;
-
-      pool.sudtAmount += swapReq.sudtAmount - sudtProfit;
-      pool.capacity  -= ckbOut;
-
-      // compose ckb
-      swapRes = new SwapRes(swapReq)
-      // transfer capacity to new cell
-      swapRes.capacity = ckbOut + swapReq.capacity
-      swapRes.sudtAmount = 0n
-    }
-    /*
-      swap_order_cell  ->  sudt_cell
-    */
-    else{
-      // spend ckb to get sudtChangeAmount
-      // ckb -> sudtChangeAmount
-
-      // since you can not spend all ckb because we need some to hold the output sudtChangeAmount cell
-      if( swapReq.capacity -swapReq.ckbIn < Sudt.SUDT_FIXED_CAPACITY){
-        return null
-      }
-
-      // the formula is as same as before :0
-      // (ckb_reserve  + spent_ckb * 99.7% ) (sudt_reserve - sudt_got) <= sudt_reserve * ckb_reserve
-      // ckb_reserve * - sudt_got + spent_ckb * 99.7% * sudt_reserve + spent_ckb * 99.7% * - sudt_got <=0
-      // spent_ckb * 99.7% * sudt_reserve <= ckb_reserve * sudt_got + spent_ckb * 99.7% * sudt_got
-      // spent_ckb * 99.7% * sudt_reserve <= (ckb_reserve + spent_ckb * 99.7% )* sudt_got
-      // spent_ckb * 997 * sudt_reserve <= (ckb_reserve * 1000 + spent_ckb * 997 )* sudt_got
-      // sudt_got >= spent_ckb * 997 * sudt_reserve / (ckb_reserve * 1000 + spent_ckb * 997 )
-
-      let sudt_got = swapReq.ckbIn*997n*info.sudtReserve / (info.ckbReserve*1000n+  swapReq.ckbIn*997n)
-
-      if(sudt_got < swapReq.sudtOutMin){
-        return null
-      }
-
-      swapReq.sudtOut = sudt_got
-
-      // the matcher got 0.1% input, floor it
-      let ckb_profit = swapReq.ckbIn/1000n
-
-      matcherChange.capacity += ckb_profit
-
-      // then all ckb, include of 0.2% as liquidity provider interest, goes into pool
-      info.ckbReserve += swapReq.ckbIn - ckb_profit
-      info.sudtReserve -= sudt_got;
-
-      pool.capacity += swapReq.ckbIn - ckb_profit
-      pool.sudtAmount -= sudt_got;
-
-      //compose sudt
-      swapRes = new SwapRes(swapReq)
-      swapRes.capacity = swapReq.capacity - swapReq.ckbIn
-      swapRes.sudtAmount += sudt_got
+    if(ckbOut < swapSellXform.request.amountOutMin){
+      swapSellXform.skip = true
+      return
     }
 
-    return [swapRes,matcherChange,info,pool]
+    if(ckbOut + swapSellXform.request.capacity < SwapSellTransformation.CKB_FIXED_MIN_CAPACITY + swapSellXform.request.tips){
+      swapSellXform.skip = true
+      return
+    }
+
+    swapSellXform.capacity = ckbOut + swapSellXform.request.capacity - SwapSellTransformation.CKB_FIXED_MIN_CAPACITY - swapSellXform.request.tips
+
+
+    swapMatch.matcherChange.capacity += swapSellXform.request.tips
+
+
+    // then all remaining sudtChangeAmount, include of 0.3% as liquidity provider interest, goes into pool
+    swapMatch.info.sudtReserve += swapSellXform.request.sudtAmount
+    swapMatch.info.ckbReserve -= ckbOut;
+
+    swapMatch.pool.sudtAmount += swapSellXform.request.sudtAmount
+    swapMatch.pool.capacity  -= ckbOut;
+
   }
-
 
 
   /*
@@ -160,171 +145,137 @@ export default class MatcherService {
   [removeReq] -> [removeRes(Sudt-cell)]
   [addReq] -> [addRes(Lpt-cell + Sudt-change-cell)]
    */
-  matchLiquidity = (liquidityRemoveReqs : Array<LiquidityRemoveReq>,
-                    liquidityAddReqs : Array<LiquidityAddReq>,
-                    info:Info, pool:Pool, matcherChange:MatcherChange)
-    :[Array<LiquidityRemoveRes>,Array<LiquidityAddRes>,Info,Pool,MatcherChange]=>{
 
-    let removeResults : Array<LiquidityRemoveRes> = []
-    for (let req of liquidityRemoveReqs){
-      let removeRes : LiquidityRemoveRes
-      let res =  this.calcRemoveReq(req,info,pool)
-      if(!res){
-        continue
-      }
-      [removeRes,info,pool] = res
-      removeResults.push(removeRes)
+  matchLiquidity = (liquidityMatch : LiquidityMatch):void =>{
+
+    for(let addXform of liquidityMatch.addXforms){
+      this.processLiquidityAddTransformation(liquidityMatch,addXform)
     }
 
-    let addResults : Array<LiquidityAddRes> = []
-    for (let req of liquidityAddReqs){
-      let addRes : LiquidityAddRes
-      let res =  this.calcAddReq(req,info,pool)
-      if(!res){
-        continue
-      }
-      [addRes,info,pool] = res
-      addResults.push(addRes)
+    for(let removelXform of liquidityMatch.removeXforms){
+      this.processLiquidityRemoveTransformation(liquidityMatch,removelXform)
     }
 
-    return [removeResults,addResults,info,pool,matcherChange]
+    if(liquidityMatch.removeXforms.every(xform => xform.skip) &&
+      liquidityMatch.addXforms.every(xform => xform.skip)
+    ){
+      liquidityMatch.skip = true
+    }else{
+      liquidityMatch.matcherChange.reduceBlockMinerFee()
+    }
   }
 
+
   /*
-     total lpt            total sudtChangeAmount          total ckb
-  ---------------  =  ----------------- =  ----------------
-   withdrawn lpt        withdrawn sudtChangeAmount?      withdrawn ckb?
+    total lpt            total sudtChangeAmount          total ckb
+ ---------------  =  ----------------- =  ----------------
+  withdrawn lpt        withdrawn sudtChangeAmount?      withdrawn ckb?
 
-   LiquidityRemoveReq -> Sudt
-  */
-  calcRemoveReq= (removeReq : LiquidityRemoveReq, info:Info, pool:Pool) : [LiquidityRemoveRes,Info,Pool] | null =>{
-    let withdrawnSudt = removeReq.lptAmount * info.sudtReserve  / info.totalLiquidity
-    let withdrawnCkb = removeReq.lptAmount * info.ckbReserve  / info.totalLiquidity
+  LiquidityRemoveReq -> Sudt + Ckb
+ */
+  processLiquidityRemoveTransformation =(liquidityMatch:LiquidityMatch,liquidityRemoveXform:LiquidityRemoveTransformation) :void =>{
+    let withdrawnSudt = liquidityRemoveXform.request.lptAmount * liquidityMatch.info.sudtReserve  / liquidityMatch.info.totalLiquidity
+    let withdrawnCkb = liquidityRemoveXform.request.lptAmount * liquidityMatch.info.ckbReserve  / liquidityMatch.info.totalLiquidity
 
-    if(withdrawnSudt < removeReq.sudtMin || withdrawnCkb < removeReq.ckbMin){
-      return null
+    if(withdrawnSudt < liquidityRemoveXform.request.sudtMin || withdrawnCkb < liquidityRemoveXform.request.ckbMin){
+      liquidityRemoveXform.skip = true
+      return
     }
 
-    if(removeReq.capacityAmount + withdrawnCkb < Sudt.SUDT_FIXED_CAPACITY){
-      // this shouldn't happen
-      return null
+    if(liquidityRemoveXform.request.capacityAmount + withdrawnCkb < LiquidityRemoveTransformation.Remove_XFORM_FIXED_MIN_CAPACITY + liquidityRemoveXform.request.tips){
+      liquidityRemoveXform.skip = true
+      return
     }
-    removeReq.ckbOut =withdrawnCkb
-    removeReq.sudtOut = withdrawnSudt
 
+    liquidityMatch.matcherChange.capacity += liquidityRemoveXform.request.tips
+
+    liquidityRemoveXform.sudtAmount =withdrawnCkb
+    liquidityRemoveXform.capacityAmount = liquidityRemoveXform.request.capacityAmount + withdrawnCkb -liquidityRemoveXform.request.tips
 
     // update info
-    info.ckbReserve -= withdrawnCkb
-    info.sudtReserve -= withdrawnSudt
+    liquidityMatch.info.ckbReserve -= withdrawnCkb
+    liquidityMatch.info.sudtReserve -= withdrawnSudt
+
+    liquidityMatch.info.totalLiquidity -= liquidityRemoveXform.request.lptAmount
 
     // update pool
-    pool.sudtAmount -= withdrawnSudt
-    pool.capacity -= withdrawnCkb
+    liquidityMatch.pool.sudtAmount -= withdrawnSudt
+    liquidityMatch.pool.capacity -= withdrawnCkb
 
-    // compose LiquidityRemoveRes
-    let ret = new LiquidityRemoveRes(removeReq)
-    // transfer the capacity into new sudtChangeAmount cell
-    ret.capacityAmount = removeReq.capacityAmount + withdrawnCkb
-    ret.sudtAmount = withdrawnSudt
-
-    return [ret,info,pool]
   }
 
   /*
-    total ckb         add ckb
-   -------------  =  ----------
-    total sudtChangeAmount        add sudtChangeAmount
+   total ckb         add ckb
+  -------------  =  ----------
+   total sudt        add sudt
 
-      total lpt       total ckb
-    ------------  =  -----------
-     return lpt?       add ckb
-    LiquidityAddReq -> Lpt(size is fixed if script is determined) + change(size is fixed if script is determined)
-   */
-  calcAddReq = (addReq:LiquidityAddReq, info:Info, pool:Pool ) :[LiquidityAddRes,Info,Pool] | null =>{
-    let addRes :LiquidityAddRes = new LiquidityAddRes(addReq)
-    // we must reserve capacity of Lpt(sudtChangeAmount) + Sudt(maybe)
+     total lpt       total ckb
+   ------------  =  -----------
+    return lpt?       add ckb
+   LiquidityAddReq -> Lpt(size is fixed if script is determined) + change(size is fixed if script is determined)
+  */
+  processLiquidityAddTransformation = (liquidityMatch:LiquidityMatch,liquidityAddXform:LiquidityAddTransformation) :void =>{
+    // first we try to use all available and have to has sudt cell to keep the change
+    let ckbAvailable = liquidityAddXform.request.capacityAmount - liquidityAddXform.request.tips - Lpt.LPT_FIXED_CAPACITY - Sudt.SUDT_FIXED_CAPACITY
 
-    // we do first try that if give all sudtChangeAmount and the needed ckb is enough which includes
-    // extra ckb to hold the Lpt cell and a Ckb cell
-    /*
-      ckb.remain            ------------------------------------->  ckb-change
-      ckb.for_lpt_capacity  ->    |--Lpt.SUDT_CAPACITY--|
-      ckb.exchange                |     LPT tokens      |
-      sudtChangeAmount.exchange               |---------------------|
-     */
-    let optimalCkb = info.ckbReserve*addReq.sudtAmount/info.sudtReserve
+    if(ckbAvailable <= 0n){
+      liquidityAddXform.skip = true
+      return
+    }
 
-    if(optimalCkb <= addReq.capacityAmount){
-      // the raw ckb is enough for all sudts
+    let sudtNeeded = ckbAvailable*liquidityMatch.info.sudtReserve/liquidityMatch.info.ckbReserve
 
-      if(optimalCkb < addReq.ckbMin){
-        // client refuse by implicit slippage
-        return null
-      }
-
-      if((optimalCkb + Lpt.LPT_FIXED_CAPACITY + Ckb.CKB_FIXED_CAPACITY) > addReq.capacityAmount){
-        // the extra ckb to hold Lpt and Ckb -change cell is not enough
-        // we simply reject this case
-        // this can do more optimize like do not exhaust both sudtChangeAmount and ckb,
-        // however this is counter-intuitive indeed
-        return null
-      }
-
-      let lptGot1 = info.totalLiquidity*optimalCkb/info.ckbReserve
-      let lptGot2 = info.totalLiquidity*addReq.sudtAmount/info.sudtReserve
+    if(sudtNeeded < liquidityAddXform.request.sudtAmount){
+      // OK, we use all ckb we can use and sudt remains
+      let lptGot1 = liquidityMatch.info.totalLiquidity*ckbAvailable/liquidityMatch.info.ckbReserve
+      let lptGot2 = liquidityMatch.info.totalLiquidity*sudtNeeded/liquidityMatch.info.sudtReserve
       let lptGot = lptGot1 > lptGot2?lptGot1:lptGot2
 
-      addRes.lptAmount = lptGot
-      addRes.ckbChangeAmount = addReq.capacityAmount - optimalCkb
-        - Lpt.LPT_FIXED_CAPACITY - Ckb.CKB_FIXED_CAPACITY
-      addRes.sudtChangeAmount = 0n
-      addRes.changeType = 'ckb'
+      liquidityMatch.matcherChange.capacity += liquidityAddXform.request.tips
 
-      info.totalLiquidity += lptGot
-      info.ckbReserve += optimalCkb
-      info.sudtReserve += addReq.sudtAmount
+      // of cause, because we drain all available ckbs and only leave these for hold cells
+      liquidityAddXform.capacityChangeAmount = Lpt.LPT_FIXED_CAPACITY + Sudt.SUDT_FIXED_CAPACITY
+      liquidityAddXform.sudtChangeAmount = liquidityAddXform.request.sudtAmount - sudtNeeded
 
-      pool.capacity += optimalCkb
-      pool.sudtAmount +=addReq.sudtAmount
+      // update info
+      liquidityMatch.info.ckbReserve += ckbAvailable
+      liquidityMatch.info.sudtReserve += sudtNeeded
+
+      liquidityMatch.info.totalLiquidity += lptGot
+
+      liquidityMatch.pool.capacity += ckbAvailable
+      liquidityMatch.pool.sudtAmount +=sudtNeeded
     }
     else{
-      // since all capacity is used to exchange without any left to hold cells
-      // and the sudtChangeAmount is still to much, thus we must construct Sudt cell to hold remaining sudtChangeAmount
+      // sudt is not enough, we drain all sudts
 
-      // use all available ckb to get sudtChangeAmount
-      let ckbToHoldCell = Lpt.LPT_FIXED_CAPACITY + Sudt.SUDT_FIXED_CAPACITY
+      let ckbNeeded =  liquidityAddXform.request.sudtAmount*liquidityMatch.info.ckbReserve/liquidityMatch.info.sudtReserve
 
-      let spentCkb = addReq.capacityAmount - ckbToHoldCell
-
-      let optimalSudt = spentCkb*info.sudtReserve/info.ckbReserve
-
-      if(optimalSudt < addReq.sudtMin){
-        // client refuse by implicit slippage
-        return null
+      const ckbLeft = liquidityAddXform.request.capacityAmount - liquidityAddXform.request.tips - ckbNeeded
+      if( ckbLeft< Ckb.CKB_FIXED_MIN_CAPACITY +  Lpt.LPT_FIXED_CAPACITY){
+        // this shouldn't happens
+        return
       }
 
-      if(optimalSudt > addReq.sudtAmount){
-        // this should not happen!!!
-        return null
-      }
-
-
-      let lptGot1 = info.totalLiquidity*spentCkb/info.ckbReserve
-      let lptGot2 = info.totalLiquidity*optimalSudt/info.sudtReserve
+      let lptGot1 = liquidityMatch.info.totalLiquidity*ckbAvailable/liquidityMatch.info.ckbReserve
+      let lptGot2 = liquidityMatch.info.totalLiquidity*sudtNeeded/liquidityMatch.info.sudtReserve
       let lptGot = lptGot1 > lptGot2?lptGot1:lptGot2
 
-      addRes.lptAmount = lptGot
-      addRes.ckbChangeAmount = 0n
-      addRes.sudtChangeAmount = addReq.sudtAmount -optimalSudt
-      addRes.changeType = 'sudt'
+      liquidityMatch.matcherChange.capacity += liquidityAddXform.request.tips
 
-      info.totalLiquidity += lptGot
-      info.sudtReserve += optimalSudt
-      info.ckbReserve += spentCkb
+      // of cause, because we drain all available ckbs and only leave these for hold cells
+      liquidityAddXform.capacityChangeAmount = ckbLeft
+      liquidityAddXform.sudtChangeAmount = 0n
 
-      pool.capacity += spentCkb
-      pool.sudtAmount += optimalSudt
+      // update info
+      liquidityMatch.info.ckbReserve += ckbNeeded
+      liquidityMatch.info.sudtReserve += liquidityAddXform.request.sudtAmount
+
+      liquidityMatch.info.totalLiquidity += lptGot
+
+      liquidityMatch.pool.capacity += ckbNeeded
+      liquidityMatch.pool.sudtAmount +=liquidityAddXform.request.sudtAmount
     }
-    return [addRes,info,pool]
   }
+
 }

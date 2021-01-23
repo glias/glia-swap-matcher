@@ -27,7 +27,20 @@ export default class DealService{
      return await this.#dealRepository.saveDeal(deal)
   }
 
-  updateDealStatus = async (input:Array<[string, Omit<DealStatus,DealStatus.Sent>] >) =>{
+  updateDealStatus = async (txHash : string, status: DealStatus ) =>{
+    this.#dealRepository.createQueryBuilder()
+      .update(Deal)
+      .set({
+        status : status
+      })
+      .where(
+        {
+          txHash : txHash
+        }
+      )
+  }
+
+  updateDealsStatus = async (input:Array<[string, Omit<DealStatus,DealStatus.Sent>] >) =>{
     let committed_deals : Array<string> = input.filter(([_txHash,status]) => {
       status===DealStatus.Committed
     }).map(([txHash, _status]) =>{

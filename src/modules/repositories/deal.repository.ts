@@ -38,7 +38,7 @@ class DealRepository extends Repository<Deal> {
         status : DealStatus.Sent
       },
       order: {
-        id: 'DESC'
+        id: 'ASC'
       },
     })
   }

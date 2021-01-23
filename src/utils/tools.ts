@@ -1,5 +1,6 @@
 import { scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
 import type { Cell, Script } from '@ckb-lumos/base'
+import { utils } from '@ckb-lumos/base'
 
 
 export function scriptHash(script: Script) : string {
@@ -9,7 +10,6 @@ export function scriptHash(script: Script) : string {
     hashType: script.hash_type
   })
 }
-
 
 export function scriptCamelToSnake(script: CKBComponents.Script) : Script{
   return {
@@ -27,22 +27,20 @@ export function scriptSnakeToCamel(script: Script) : CKBComponents.Script{
   }
 }
 
-/*
-convert little-endian hex string to BigInt
- */
-export const leHexToBigInt = (rawHexString: string) : bigint=> {
-  const buf = Buffer.from(rawHexString, 'hex')
-  const hex =  buf.reverse().toString('hex')
-  return BigInt('0x' + hex)
+export const leHexToBigIntUint128 = (rawHexString : string) : bigint =>{
+  return utils.readBigUInt128LE(prepare0xPrefix(rawHexString))
 }
-/*
-convert BigInt to 128-bit/16-byte little-endian hex string
- */
-export const bigIntTo128LeHex = (u128: bigint) : string=> {
-  const buf = Buffer.alloc(16)
-  buf.writeBigUInt64LE(u128 & BigInt('0xFFFFFFFFFFFFFFFF'), 0)
-  buf.writeBigUInt64LE(u128 >> BigInt(64), 8)
-  return `${buf.toString('hex')}`
+
+export const leHexToBigIntUint64 = (rawHexString : string) : bigint =>{
+  return utils.readBigUInt64LE(prepare0xPrefix(rawHexString))
+}
+
+export const Uint128BigIntToLeHex = (u128: bigint) : string=> {
+  return utils.toBigUInt128LE(u128)
+}
+
+export const Uint64BigIntToLeHex = (u64: bigint) : string=> {
+  return utils.toBigUInt64LE(u64)
 }
 
 /*
@@ -76,7 +74,11 @@ export const getCellFromRawTransaction = (rawTx:CKBComponents.RawTransaction, tx
   }
 }
 
-function remove0xPrefix (input:string) : string{
+export function remove0xPrefix (input:string) : string{
   return input.startsWith('0x')?input.substring(2):input
+}
+
+export function prepare0xPrefix(input:string) : string{
+  return input.startsWith('0x')? input: '0x'+input
 }
 

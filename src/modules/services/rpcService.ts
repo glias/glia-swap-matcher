@@ -4,7 +4,6 @@ import { DEFAULT_NODE_URL } from '../../utils'
 import { DealStatus } from '../models/deal.entity'
 import { OutPoint } from '@ckb-lumos/base'
 import { scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
-import { leHexToBigInt } from '../../utils/tools'
 
 @injectable()
 export default class RpcService {
@@ -29,14 +28,14 @@ export default class RpcService {
      )
   }
 
-  // give an outpoint of certain cell, find a lockscript from the tx inside the
+  // give an outpoint of certain cell, find a lockscript fromCell the tx inside the
   // the outpoint which matches target hash
   getLockScript = async (outPoint:OutPoint, lockScriptHash: string)
     : Promise<CKBComponents.Script|null>  =>{
     const tx = await this.#client.getTransaction(outPoint.tx_hash!)
     for (let input of tx.transaction.inputs){
       const pre_tx = await this.#client.getTransaction(input.previousOutput!.txHash)
-      const outputCell = pre_tx.transaction.outputs[Number(leHexToBigInt(input.previousOutput!.index))]
+      const outputCell = pre_tx.transaction.outputs[Number(input.previousOutput!.index)]
       if (scriptToHash(outputCell.lock)===lockScriptHash){
         return outputCell.lock
       }
