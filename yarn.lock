@@ -1147,6 +1147,11 @@ better-assert@~1.0.0:
   dependencies:
     callsite "1.0.0"
 
+bigint-isqrt@^0.2.1:
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/bigint-isqrt/-/bigint-isqrt-0.2.1.tgz#67aa216538361e440bfd6d119bc409d8b9c8044b"
+  integrity sha512-x43s2Qx5l5ShFZFA5xejJfPtV1vXISyWUXlrZeJTx9F6D2ex3BR6AwWnIz4ITAu5nTy3hp+d+ClGu7qUGcgY8g==
+
 binary-extensions@^2.0.0:
   version "2.1.0"
   resolved "https://registry.npmjs.org/binary-extensions/-/binary-extensions-2.1.0.tgz#30fa40c9e7fe07dbc895678cd287024dea241dd9"

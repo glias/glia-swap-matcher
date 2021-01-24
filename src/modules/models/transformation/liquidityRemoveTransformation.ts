@@ -16,7 +16,7 @@ export class LiquidityRemoveTransformation implements Transformation{
 
   // after process, this is the data for sudt_cell + ckb_cell
 
-  public static  Remove_XFORM_FIXED_MIN_CAPACITY = Sudt.SUDT_FIXED_CAPACITY + Ckb.CKB_FIXED_MIN_CAPACITY
+  public static  REMOVE_XFORM_FIXED_MIN_CAPACITY = Sudt.SUDT_FIXED_CAPACITY + Ckb.CKB_FIXED_MIN_CAPACITY
 
 
   // total sudt to return

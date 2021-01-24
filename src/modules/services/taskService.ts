@@ -17,6 +17,7 @@ import { SwapBuyTransformation } from '../models/transformation/swapBuyTransform
 import { LiquidityMatch } from '../models/matches/liquidityMatch'
 import { SwapMatch } from '../models/matches/swapMatch'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
+import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
 
 const logTag = `\x1b[35m[Tasks Service]\x1b[0m`
 
@@ -88,12 +89,17 @@ export default class TaskService {
 
     let [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = await this.#scanService.scanAll()
 
+    // check if we are in Init mode
+    if(info.ckbReserve === 0n || info.sudtReserve ===0n){
+
+    }
+
     // use the info's outpoint to search our db
     // the result may be null, may present with Committed, or may present with Sent
     const dealRes: Deal | null = await this.#dealService.getByTxHash(info.outPoint.tx_hash)
 
     if (!dealRes) {
-      // the info is not in our deal, some one cuts off our deals
+      // the info is not in our deal, some one cuts off our deals, or maybe we are new to the pair
 
       // get all deal txs we sent
       let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
@@ -188,6 +194,12 @@ export default class TaskService {
                    pool: Pool,
                    matcherChange: MatcherChange) => {
 
+    // if the pool of pair is empty
+    if(info.sudtReserve === 0n || info.ckbReserve === 0n){
+      await this.handlerInit(addXforms,info,pool,matcherChange)
+      return
+    }
+
     let liquidityMatch: LiquidityMatch = new LiquidityMatch(
       info,
       pool,
@@ -257,6 +269,29 @@ export default class TaskService {
 
       await this.#rpcService.sendTransaction(swapMatch.composedTx!)
     }
+  }
+  handlerInit = async (addXforms: Array<LiquidityAddTransformation>,
+                   info: Info,
+                   pool: Pool,
+                   matcherChange: MatcherChange) => {
+    // have to init
+    if(addXforms.length ==0){
+      // have to init but no one add liquidity, have to quit
+      return
+    }
 
+    let liquidityMatch: LiquidityMatch = new LiquidityMatch(
+      info,
+      pool,
+      matcherChange,
+      [],
+      [],
+    )
+    liquidityMatch.initXforms = new LiquidityInitTransformation( addXforms[0].request)
+
+
+    this.#matcherService.initLiquidity(liquidityMatch)
+    this.#transactionService.composeLiquidityInitTransaction(liquidityMatch)
+    await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
   }
 }

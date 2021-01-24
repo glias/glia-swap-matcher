@@ -4,6 +4,7 @@ import { MatcherChange } from '../cells/matcherChange'
 import { LiquidityAddTransformation } from '../transformation/liquidityAddTransformation'
 import { LiquidityRemoveTransformation } from '../transformation/liquidityRemoveTransformation'
 import { Match } from './interfaces/match'
+import { LiquidityInitTransformation } from '../transformation/liquidityInitTransformation'
 
 export class LiquidityMatch implements Match{
   // contexts
@@ -14,8 +15,9 @@ export class LiquidityMatch implements Match{
   // transformations to process
   addXforms :Array<LiquidityAddTransformation>
   removeXforms : Array<LiquidityRemoveTransformation>
+  initXforms? : LiquidityInitTransformation
 
-  // null if this Match doesn't need to send tx, which means, no match jobs are done
+    // null if this Match doesn't need to send tx, which means, no match jobs are done
   composedTx?: CKBComponents.RawTransaction
   composedTxHash?: string
   skip:boolean

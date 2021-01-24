@@ -8,7 +8,9 @@ import { Lpt } from '../models/cells/lpt'
 import { LiquidityMatch } from '../models/matches/liquidityMatch'
 import { SwapMatch } from '../models/matches/swapMatch'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
-
+import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
+// @ts-ignore
+import sqrt from 'bigint-isqrt'
 
 @injectable()
 export default class MatcherService {
@@ -182,7 +184,7 @@ export default class MatcherService {
       return
     }
 
-    if(liquidityRemoveXform.request.capacityAmount + withdrawnCkb < LiquidityRemoveTransformation.Remove_XFORM_FIXED_MIN_CAPACITY + liquidityRemoveXform.request.tips){
+    if(liquidityRemoveXform.request.capacityAmount + withdrawnCkb < LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY + liquidityRemoveXform.request.tips){
       liquidityRemoveXform.skip = true
       return
     }
@@ -278,4 +280,26 @@ export default class MatcherService {
     }
   }
 
+  // req -> lpt
+  initLiquidity = (liquidityMatch : LiquidityMatch):void =>{
+    let liquidityInitXform = liquidityMatch.initXforms!
+
+    let ckbAvailable = liquidityInitXform.request.capacityAmount - liquidityInitXform.request.tips - LiquidityInitTransformation.LPT_FIXED_CAPACITY
+
+    let lptMinted = sqrt(ckbAvailable * liquidityInitXform.request.sudtAmount)
+
+    liquidityInitXform.lptAmount = lptMinted
+
+
+    liquidityMatch.matcherChange.capacity += liquidityInitXform.request.tips
+
+    // update info
+    liquidityMatch.info.ckbReserve += ckbAvailable
+    liquidityMatch.info.sudtReserve += liquidityInitXform.request.sudtAmount
+
+    liquidityMatch.info.totalLiquidity += lptMinted
+
+    liquidityMatch.pool.capacity += ckbAvailable
+    liquidityMatch.pool.sudtAmount += liquidityInitXform.request.sudtAmount
+  }
 }

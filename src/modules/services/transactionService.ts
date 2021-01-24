@@ -131,6 +131,36 @@ export default class TransactionService {
 
   }
 
+  composeLiquidityInitTransaction = (liquidityMatch:LiquidityMatch): void => {
+
+    const inputs: CKBComponents.CellInput[] = []
+    const outputs: CKBComponents.CellOutput[] = []
+    const outputsData: string[] = []
+
+    inputs.push(liquidityMatch.info.toCellInput())
+    outputs.push(liquidityMatch.info.toCellOutput())
+    outputsData.push(liquidityMatch.info.toCellOutputData())
+
+    inputs.push(liquidityMatch.pool.toCellInput())
+    outputs.push(liquidityMatch.pool.toCellOutput())
+    outputsData.push(liquidityMatch.pool.toCellOutputData())
+
+    inputs.push(liquidityMatch.matcherChange.toCellInput())
+    outputs.push(liquidityMatch.matcherChange.toCellOutput())
+    outputsData.push(liquidityMatch.matcherChange.toCellOutputData())
+
+    inputs.push(liquidityMatch.initXforms!.toCellInput())
+    outputs.concat(liquidityMatch.initXforms!.toCellOutput())
+    outputsData.concat(liquidityMatch.initXforms!.toCellOutputData())
+
+    const [signedTx,txHash] =  this.composeTxAndSign(inputs,outputs,outputsData)
+
+    liquidityMatch.composedTx = signedTx
+    liquidityMatch.composedTxHash = txHash
+
+  }
+
+
   composeTxAndSign = (inputs : Array<CKBComponents.CellInput>,
                       outputs :Array<CKBComponents.CellOutput>,
                       outputsData: Array<string>) : [CKBComponents.RawTransaction,string] =>{
