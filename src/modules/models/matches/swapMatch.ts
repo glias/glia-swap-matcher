@@ -5,28 +5,33 @@ import { SwapBuyTransformation } from '../transformation/swapBuyTransformation'
 import { SwapSellTransformation } from '../transformation/swapSellTransformation'
 import { Match } from './interfaces/match'
 
-export class SwapMatch implements Match{
+export class SwapMatch implements Match {
   // contexts
-  info : Info
-  pool : Pool
-  matcherChange : MatcherChange
+  info: Info
+  pool: Pool
+  matcherChange: MatcherChange
 
   // transformations to process
-  buyXforms :Array<SwapBuyTransformation>
-  sellXforms : Array<SwapSellTransformation>
+  buyXforms: Array<SwapBuyTransformation>
+  sellXforms: Array<SwapSellTransformation>
 
   // null if this Match doesn't need to send tx, which means, no match jobs are done
   composedTx?: CKBComponents.RawTransaction
   composedTxHash?: string
-  skip:boolean
+  skip: boolean
 
-  constructor(info: Info, pool: Pool, matcherChange: MatcherChange, buyXforms: Array<SwapBuyTransformation>, sellXforms: Array<SwapSellTransformation>) {
+  constructor(
+    info: Info,
+    pool: Pool,
+    matcherChange: MatcherChange,
+    buyXforms: Array<SwapBuyTransformation>,
+    sellXforms: Array<SwapSellTransformation>,
+  ) {
     this.info = info
     this.pool = pool
     this.matcherChange = matcherChange
     this.buyXforms = buyXforms
     this.sellXforms = sellXforms
     this.skip = false
-
   }
 }

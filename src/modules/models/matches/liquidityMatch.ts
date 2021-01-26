@@ -6,23 +6,29 @@ import { LiquidityRemoveTransformation } from '../transformation/liquidityRemove
 import { Match } from './interfaces/match'
 import { LiquidityInitTransformation } from '../transformation/liquidityInitTransformation'
 
-export class LiquidityMatch implements Match{
+export class LiquidityMatch implements Match {
   // contexts
-  info : Info
-  pool : Pool
-  matcherChange : MatcherChange
+  info: Info
+  pool: Pool
+  matcherChange: MatcherChange
 
   // transformations to process
-  addXforms :Array<LiquidityAddTransformation>
-  removeXforms : Array<LiquidityRemoveTransformation>
-  initXforms? : LiquidityInitTransformation
+  addXforms: Array<LiquidityAddTransformation>
+  removeXforms: Array<LiquidityRemoveTransformation>
+  initXforms?: LiquidityInitTransformation
 
-    // null if this Match doesn't need to send tx, which means, no match jobs are done
+  // null if this Match doesn't need to send tx, which means, no match jobs are done
   composedTx?: CKBComponents.RawTransaction
   composedTxHash?: string
-  skip:boolean
+  skip: boolean
 
-  constructor(info: Info, pool: Pool, matcherChange: MatcherChange, addXforms: Array<LiquidityAddTransformation>, removeXforms: Array<LiquidityRemoveTransformation>) {
+  constructor(
+    info: Info,
+    pool: Pool,
+    matcherChange: MatcherChange,
+    addXforms: Array<LiquidityAddTransformation>,
+    removeXforms: Array<LiquidityRemoveTransformation>,
+  ) {
     this.info = info
     this.pool = pool
     this.matcherChange = matcherChange

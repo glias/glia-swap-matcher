@@ -2,11 +2,7 @@ import { injectable } from 'inversify'
 import { Info } from '../models/cells/info'
 import { Pool } from '../models/cells/pool'
 import { MatcherChange } from '../models/cells/matcherChange'
-import {
-  ALL_CELL_DEPS,
-  DEFAULT_NODE_URL,
-  PRIVATE_KEY,
-} from '../../utils'
+import { ALL_CELL_DEPS, CKB_NODE_URL, MATCHER_PRIVATE_KEY } from '../../utils/envs'
 import CKB from '@nervosnetwork/ckb-sdk-core'
 import { LiquidityMatch } from '../models/matches/liquidityMatch'
 import { SwapMatch } from '../models/matches/swapMatch'
@@ -19,12 +15,12 @@ export default class TransactionService {
   readonly #ckb: CKB
 
   constructor() {
-    this.#ckb = new CKB(DEFAULT_NODE_URL)
+    this.#ckb = new CKB(CKB_NODE_URL)
   }
 
-  composeLiquidityTransaction = (liquidityMatch:LiquidityMatch):[Info,Pool,MatcherChange] =>{
-    if(!liquidityMatch.skip){
-      return [liquidityMatch.info,liquidityMatch.pool,liquidityMatch.matcherChange]
+  composeLiquidityTransaction = (liquidityMatch: LiquidityMatch): [Info, Pool, MatcherChange] => {
+    if (!liquidityMatch.skip) {
+      return [liquidityMatch.info, liquidityMatch.pool, liquidityMatch.matcherChange]
     }
     const inputs: CKBComponents.CellInput[] = []
     const outputs: CKBComponents.CellOutput[] = []
@@ -43,8 +39,7 @@ export default class TransactionService {
     outputsData.push(liquidityMatch.matcherChange.toCellOutputData())
 
     for (let removeXform of liquidityMatch.removeXforms) {
-
-      if(removeXform.skip){
+      if (removeXform.skip) {
         continue
       }
 
@@ -54,8 +49,7 @@ export default class TransactionService {
     }
 
     for (let addXform of liquidityMatch.addXforms) {
-
-      if(addXform.skip){
+      if (addXform.skip) {
         continue
       }
 
@@ -65,14 +59,16 @@ export default class TransactionService {
     }
 
     // compose tx
-    const [signedTx,txHash] =  this.composeTxAndSign(inputs,outputs,outputsData)
+    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
 
     liquidityMatch.composedTx = signedTx
     liquidityMatch.composedTxHash = txHash
 
-    return [Info.cloneWith(liquidityMatch.info,txHash,'0x00'),
-      Pool.cloneWith(liquidityMatch.pool,txHash,'0x01'),
-      MatcherChange.cloneWith(liquidityMatch.matcherChange,txHash,'0x02')]
+    return [
+      Info.cloneWith(liquidityMatch.info, txHash, '0x00'),
+      Pool.cloneWith(liquidityMatch.pool, txHash, '0x01'),
+      MatcherChange.cloneWith(liquidityMatch.matcherChange, txHash, '0x02'),
+    ]
   }
 
   /*
@@ -82,8 +78,8 @@ export default class TransactionService {
   matcher_in_cell                         matcher_out_cell
   [swap_order_cell]                       [sudt_cell/free_cell]
  */
-  composeSwapTransaction = (swapMatch:SwapMatch): void => {
-    if(!swapMatch.skip){
+  composeSwapTransaction = (swapMatch: SwapMatch): void => {
+    if (!swapMatch.skip) {
       return
     }
     const inputs: CKBComponents.CellInput[] = []
@@ -103,8 +99,7 @@ export default class TransactionService {
     outputsData.push(swapMatch.matcherChange.toCellOutputData())
 
     for (let buyXform of swapMatch.buyXforms) {
-
-      if(buyXform.skip){
+      if (buyXform.skip) {
         continue
       }
 
@@ -114,8 +109,7 @@ export default class TransactionService {
     }
 
     for (let sellXform of swapMatch.sellXforms) {
-
-      if(sellXform.skip){
+      if (sellXform.skip) {
         continue
       }
 
@@ -124,15 +118,13 @@ export default class TransactionService {
       outputsData.concat(sellXform.toCellOutputData())
     }
 
-    const [signedTx,txHash] =  this.composeTxAndSign(inputs,outputs,outputsData)
+    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
 
     swapMatch.composedTx = signedTx
     swapMatch.composedTxHash = txHash
-
   }
 
-  composeLiquidityInitTransaction = (liquidityMatch:LiquidityMatch): void => {
-
+  composeLiquidityInitTransaction = (liquidityMatch: LiquidityMatch): void => {
     const inputs: CKBComponents.CellInput[] = []
     const outputs: CKBComponents.CellOutput[] = []
     const outputsData: string[] = []
@@ -153,17 +145,17 @@ export default class TransactionService {
     outputs.concat(liquidityMatch.initXforms!.toCellOutput())
     outputsData.concat(liquidityMatch.initXforms!.toCellOutputData())
 
-    const [signedTx,txHash] =  this.composeTxAndSign(inputs,outputs,outputsData)
+    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
 
     liquidityMatch.composedTx = signedTx
     liquidityMatch.composedTxHash = txHash
-
   }
 
-
-  composeTxAndSign = (inputs : Array<CKBComponents.CellInput>,
-                      outputs :Array<CKBComponents.CellOutput>,
-                      outputsData: Array<string>) : [CKBComponents.RawTransaction,string] =>{
+  composeTxAndSign = (
+    inputs: Array<CKBComponents.CellInput>,
+    outputs: Array<CKBComponents.CellOutput>,
+    outputsData: Array<string>,
+  ): [CKBComponents.RawTransaction, string] => {
     const rawTx: CKBComponents.RawTransaction = {
       version: '0x0',
       headerDeps: [],
@@ -177,20 +169,17 @@ export default class TransactionService {
     return this.signTransaction(rawTx)
   }
 
-
-  signTransaction = (rawTransaction: CKBComponents.RawTransactionToSign )
-    :[CKBComponents.RawTransaction, string] => {
+  signTransaction = (rawTransaction: CKBComponents.RawTransactionToSign): [CKBComponents.RawTransaction, string] => {
     const txHash = this.#ckb.utils.rawTransactionToHash(rawTransaction)
-    const witness = this.#ckb.signWitnesses(PRIVATE_KEY)({
+    const witness = this.#ckb.signWitnesses(MATCHER_PRIVATE_KEY)({
       transactionHash: txHash,
       witnesses: [{ lock: '', inputType: '', outputType: '' }],
     })[0]
 
     const signedTx: any = {
       ...rawTransaction,
-      witnesses: [witness, ...rawTransaction.witnesses.slice(1)]
+      witnesses: [witness, ...rawTransaction.witnesses.slice(1)],
     }
-    return  [signedTx,txHash]
+    return [signedTx, txHash]
   }
-
 }

@@ -12,40 +12,38 @@ matcher_in_cell(ckb)                    matcher_out_cell(ckb)
 [removed_liquidity_cell]                [sudt_cell + ckb_cell]  <--- this is Transformation
 [add_liquidity_cell]                    [liquidity_cell + (sudt_cell或者ckb_cell)]
  */
-export class LiquidityRemoveTransformation implements Transformation{
-
+export class LiquidityRemoveTransformation implements Transformation {
   // after process, this is the data for sudt_cell + ckb_cell
 
-  public static  REMOVE_XFORM_FIXED_MIN_CAPACITY = Sudt.SUDT_FIXED_CAPACITY + Ckb.CKB_FIXED_MIN_CAPACITY
-
+  public static REMOVE_XFORM_FIXED_MIN_CAPACITY = Sudt.SUDT_FIXED_CAPACITY + Ckb.CKB_FIXED_MIN_CAPACITY
 
   // total sudt to return
-  sudtAmount: bigint;
+  sudtAmount: bigint
   // total ckb to return, sudt cell capacity + ckb cell capacity
-  capacityAmount: bigint;
+  capacityAmount: bigint
 
-  request : LiquidityRemoveReq;
-  processed :boolean
-  skip:boolean
+  request: LiquidityRemoveReq
+  processed: boolean
+  skip: boolean
 
-  output_sudt? :Sudt
+  output_sudt?: Sudt
   output_ckb?: Ckb
-  constructor(request:LiquidityRemoveReq) {
-    this.request = request;
+  constructor(request: LiquidityRemoveReq) {
+    this.request = request
     this.sudtAmount = 0n
     this.capacityAmount = 0n
     this.processed = false
     this.skip = false
   }
 
-  static validate(_cell:Cell){
-    return true;
+  static validate(_cell: Cell) {
+    return true
   }
 
-  process() : void {
-    if(!this.processed){
-      this.output_sudt = Sudt.from(this.sudtAmount,this.request.originalUserLock)
-      this.output_ckb = Ckb.from(this.capacityAmount - Sudt.SUDT_FIXED_CAPACITY,this.request.originalUserLock)
+  process(): void {
+    if (!this.processed) {
+      this.output_sudt = Sudt.from(this.sudtAmount, this.request.originalUserLock)
+      this.output_ckb = Ckb.from(this.capacityAmount - Sudt.SUDT_FIXED_CAPACITY, this.request.originalUserLock)
     }
   }
 
@@ -55,11 +53,11 @@ export class LiquidityRemoveTransformation implements Transformation{
 
   toCellOutput(): Array<CKBComponents.CellOutput> {
     this.process()
-    return [this.output_sudt!.toCellOutput(),this.output_ckb!.toCellOutput()]
+    return [this.output_sudt!.toCellOutput(), this.output_ckb!.toCellOutput()]
   }
 
   toCellOutputData(): Array<string> {
     this.process()
-    return [this.output_sudt!.toCellOutputData(),this.output_ckb!.toCellOutputData()]
+    return [this.output_sudt!.toCellOutputData(), this.output_ckb!.toCellOutputData()]
   }
 }

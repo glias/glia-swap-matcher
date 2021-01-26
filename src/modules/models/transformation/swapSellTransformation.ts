@@ -3,18 +3,18 @@ import { Ckb } from '../cells/ckb'
 import { SwapSellReq } from '../cells/swapSellReq'
 import { Transformation } from './interfaces/transformation'
 
-export class SwapSellTransformation implements Transformation{
-  public static  CKB_FIXED_MIN_CAPACITY = Ckb.CKB_FIXED_MIN_CAPACITY
+export class SwapSellTransformation implements Transformation {
+  public static CKB_FIXED_MIN_CAPACITY = Ckb.CKB_FIXED_MIN_CAPACITY
 
   // all ckbs it gets
-  capacity: bigint;
+  capacity: bigint
 
-  request :SwapSellReq;
-  processed :boolean
-  skip:boolean
-  outputCkb? : Ckb
+  request: SwapSellReq
+  processed: boolean
+  skip: boolean
+  outputCkb?: Ckb
 
-  constructor(request :SwapSellReq) {
+  constructor(request: SwapSellReq) {
     this.capacity = 0n
     this.request = request
 
@@ -22,13 +22,13 @@ export class SwapSellTransformation implements Transformation{
     this.skip = false
   }
 
-  static validate(_cell:Cell){
-    return true;
+  static validate(_cell: Cell) {
+    return true
   }
 
-  process() : void {
-    if(!this.processed){
-      this.outputCkb = Ckb.from(this.capacity,this.request.originalUserLock)
+  process(): void {
+    if (!this.processed) {
+      this.outputCkb = Ckb.from(this.capacity, this.request.originalUserLock)
     }
   }
 
@@ -39,13 +39,12 @@ export class SwapSellTransformation implements Transformation{
   toCellOutput(): Array<CKBComponents.CellOutput> {
     this.process()
 
-    return [this.outputCkb!.toCellOutput()];
+    return [this.outputCkb!.toCellOutput()]
   }
 
   toCellOutputData(): Array<string> {
-
     this.process()
 
-    return [this.outputCkb!.toCellOutputData()];
+    return [this.outputCkb!.toCellOutputData()]
   }
 }

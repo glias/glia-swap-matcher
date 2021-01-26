@@ -1,11 +1,6 @@
 import type { Cell } from '@ckb-lumos/base'
-import {
-  changeHexEncodeEndian,
-  leHexToBigIntUint128,
-  leHexToBigIntUint64,
-  scriptHash,
-} from '../../../utils/tools'
-import { SUDT_TYPE_SCRIPT_HASH } from '../../../utils'
+import { changeHexEncodeEndian, leHexToBigIntUint128, leHexToBigIntUint64, scriptHash } from '../../../utils/tools'
+import { SUDT_TYPE_SCRIPT_HASH } from '../../../utils/envs'
 import { CellInputType } from './interfaces/CellInputType'
 import { OutPoint } from '@ckb-lumos/base'
 
@@ -28,8 +23,8 @@ lock: - 146 bytes
     | tips_sudt (16 bytes, 97..113)
 
  */
-export class LiquidityAddReq implements CellInputType{
-  static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt(235 * 10^8)
+export class LiquidityAddReq implements CellInputType {
+  static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt((235 * 10) ^ 8)
 
   // given sudt for add
   sudtAmount: bigint
@@ -38,11 +33,11 @@ export class LiquidityAddReq implements CellInputType{
 
   public userLockHash: string
 
-  version: string;
+  version: string
 
-  sudtMin:bigint;
+  sudtMin: bigint
 
-  ckbMin:bigint;
+  ckbMin: bigint
 
   infoTypeHash: string
 
@@ -53,55 +48,50 @@ export class LiquidityAddReq implements CellInputType{
 
   outPoint: OutPoint
 
-  constructor(cell:Cell, script:CKBComponents.Script) {
+  constructor(cell: Cell, script: CKBComponents.Script) {
+    this.sudtAmount = leHexToBigIntUint128(cell.data)
+    this.capacityAmount = BigInt(cell.cell_output.capacity)
 
-    this.sudtAmount = leHexToBigIntUint128(cell.data);
-    this.capacityAmount = BigInt(cell.cell_output.capacity);
+    const args = cell.cell_output.lock.args.substring(2)
+    this.userLockHash = changeHexEncodeEndian(args.substring(0, 64))
+    this.version = args.substring(64, 66)
 
-    const args = cell.cell_output.lock.args.substring(2);
-    this.userLockHash = changeHexEncodeEndian(args.substring(0,64));
-    this.version = args.substring(64,66);
+    this.sudtMin = leHexToBigIntUint128(args.substring(66, 98))
+    this.ckbMin = leHexToBigIntUint64(args.substring(98, 114))
 
-    this.sudtMin =  leHexToBigIntUint128(args.substring(66,98));
-    this.ckbMin =  leHexToBigIntUint64(args.substring(98,114));
+    this.infoTypeHash = changeHexEncodeEndian(args.substring(114, 178))
 
-    this.infoTypeHash = changeHexEncodeEndian(args.substring(114,178));
-
-    this.tips =  leHexToBigIntUint64(args.substring(178,194));
-    this.tipsSudt =  leHexToBigIntUint128(args.substring(194,226));
-
+    this.tips = leHexToBigIntUint64(args.substring(178, 194))
+    this.tipsSudt = leHexToBigIntUint128(args.substring(194, 226))
 
     this.outPoint = cell.out_point!
     this.originalUserLock = script
-
   }
 
-  static fromCell(cell:Cell,script:CKBComponents.Script):LiquidityAddReq|null{
-    if( ! LiquidityAddReq.validate(cell)){
+  static fromCell(cell: Cell, script: CKBComponents.Script): LiquidityAddReq | null {
+    if (!LiquidityAddReq.validate(cell)) {
       return null
     }
 
-    return new LiquidityAddReq(cell,script)
+    return new LiquidityAddReq(cell, script)
   }
 
-  static validate(cell:Cell){
-    if(scriptHash(cell.cell_output.type!) != SUDT_TYPE_SCRIPT_HASH){
+  static validate(cell: Cell) {
+    if (scriptHash(cell.cell_output.type!) != SUDT_TYPE_SCRIPT_HASH) {
       return false
     }
-    if(BigInt(cell.cell_output.capacity) < LiquidityAddReq.LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY){
+    if (BigInt(cell.cell_output.capacity) < LiquidityAddReq.LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY) {
       return false
     }
 
-    if(!cell.out_point){
+    if (!cell.out_point) {
       return false
     }
 
     return true
   }
-  static getUserLockHash(cell:Cell) : string{
-    return changeHexEncodeEndian(
-      cell.cell_output.lock.args.substring(2)
-        .substring(0,64))
+  static getUserLockHash(cell: Cell): string {
+    return changeHexEncodeEndian(cell.cell_output.lock.args.substring(2).substring(0, 64))
   }
 
   toCellInput(): CKBComponents.CellInput {
@@ -111,11 +101,10 @@ export class LiquidityAddReq implements CellInputType{
         index: this.outPoint.index,
       },
       since: '0x00',
-    };
+    }
   }
 
-  getOutPoint():string{
+  getOutPoint(): string {
     return `${this.outPoint.tx_hash}-${this.outPoint.index}`
   }
-
 }

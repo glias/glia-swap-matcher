@@ -15,29 +15,26 @@ import { Transformation } from './interfaces/transformation'
 import { LiquidityAddReq } from '../cells/liquidityAddReq'
 import { Lpt } from '../cells/lpt'
 
-export class LiquidityInitTransformation implements Transformation{
-
+export class LiquidityInitTransformation implements Transformation {
   public static LPT_FIXED_CAPACITY = Lpt.LPT_FIXED_CAPACITY
 
   lptAmount: bigint
 
-  request : LiquidityAddReq
-  processed :boolean
-  skip:boolean
+  request: LiquidityAddReq
+  processed: boolean
+  skip: boolean
 
-  outputLpt? :Lpt
-  constructor(request:LiquidityAddReq) {
-    this.request = request;
+  outputLpt?: Lpt
+  constructor(request: LiquidityAddReq) {
+    this.request = request
     this.lptAmount = 0n
     this.processed = false
     this.skip = false
   }
 
-
-
-  process() : void {
-    if(!this.processed){
-      this.outputLpt = Lpt.from(this.lptAmount,this.request.originalUserLock)
+  process(): void {
+    if (!this.processed) {
+      this.outputLpt = Lpt.from(this.lptAmount, this.request.originalUserLock)
     }
   }
 
@@ -48,12 +45,12 @@ export class LiquidityInitTransformation implements Transformation{
   toCellOutput(): Array<CKBComponents.CellOutput> {
     this.process()
 
-    return [this.outputLpt!.toCellOutput()];
+    return [this.outputLpt!.toCellOutput()]
   }
 
   toCellOutputData(): Array<string> {
     this.process()
 
-    return [this.outputLpt!.toCellOutputData()];
+    return [this.outputLpt!.toCellOutputData()]
   }
 }

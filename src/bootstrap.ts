@@ -3,13 +3,14 @@ import path from 'path'
 import { promisify } from 'util'
 import { createConnection } from 'typeorm'
 import { container, modules } from './container'
-import { logger, NODE_ENV } from './utils'
+import { logger } from './utils/logger'
+import { NODE_ENV } from './utils/envs'
+
 
 
 const logTag = `\x1b[35m[Bootstrap]\x1b[0m`
 
 const registerModule = async (modulePath: string) => {
-  logger.info(`registerModule: ${modulePath}`)
   const { default: m } = await import(modulePath)
   modules[m.name] = Symbol(m.name)
   container.bind(modules[m.name]).to(m)
@@ -34,7 +35,12 @@ const bootstrap = async () => {
       injectableNames.map(injectableName => path.join(injectableDir, injectableName)),
     )
     for (const injectablePath of injectablePaths) {
-      await registerModule(injectablePath)
+      try{
+        await registerModule(injectablePath)
+        logger.info(`registered module: ${injectablePath}`)
+      }catch (e){
+        // we just skip for files don't have injectables :)
+      }
     }
   }
 

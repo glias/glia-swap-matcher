@@ -1,89 +1,87 @@
 import { injectable } from 'inversify'
 import { getConnection, In } from 'typeorm'
 import DealRepository from '../repositories/deal.repository'
-import { Deal, DealStatus } from '../models/deal.entity'
-import { NODE_ENV } from '../../utils'
+import { Deal, DealStatus } from '../models/entities/deal.entity'
+import { NODE_ENV } from '../../utils/envs'
 
 @injectable()
-export default class DealService{
+export default class DealService {
   #dealRepository = getConnection(NODE_ENV).getCustomRepository(DealRepository)
 
-
-  getAllSentDeals = async () : Promise<Array<Deal>> =>{
+  getAllSentDeals = async (): Promise<Array<Deal>> => {
     return await this.#dealRepository.getAllSentDeals()
-
   }
 
-  getByPreTxHash = async (preTxHash: string) :Promise<Deal|null> =>{
+  getByPreTxHash = async (preTxHash: string): Promise<Deal | null> => {
     return await this.#dealRepository.getByPreTxHahs(preTxHash)
   }
 
-
-  getByTxHash = async (txHash: string) : Promise<Deal|null> =>{
+  getByTxHash = async (txHash: string): Promise<Deal | null> => {
     return await this.#dealRepository.getByTxHahs(txHash)
   }
 
-  saveDeal = async (deal:Omit<Deal,'createdAt'|'id'>)  : Promise<Deal>=>{
-     return await this.#dealRepository.saveDeal(deal)
+  saveDeal = async (deal: Omit<Deal, 'createdAt' | 'id'>): Promise<Deal> => {
+    return await this.#dealRepository.saveDeal(deal)
   }
 
-  updateDealStatus = async (txHash : string, status: DealStatus ) =>{
-    this.#dealRepository.createQueryBuilder()
+  updateDealStatus = async (txHash: string, status: DealStatus) => {
+    this.#dealRepository
+      .createQueryBuilder()
       .update(Deal)
       .set({
-        status : status
+        status: status,
       })
-      .where(
-        {
-          txHash : txHash
-        }
-      )
+      .where({
+        txHash: txHash,
+      })
   }
 
-  updateDealsStatus = async (input:Array<[string, Omit<DealStatus,DealStatus.Sent>] >) =>{
-    let committed_deals : Array<string> = input.filter(([_txHash,status]) => {
-      status===DealStatus.Committed
-    }).map(([txHash, _status]) =>{
-      return txHash
-    })
+  updateDealsStatus = async (input: Array<[string, Omit<DealStatus, DealStatus.Sent>]>) => {
+    let committed_deals: Array<string> = input
+      .filter(([_txHash, status]) => {
+        status === DealStatus.Committed
+      })
+      .map(([txHash, _status]) => {
+        return txHash
+      })
 
-    if( committed_deals.length){
-      this.#dealRepository.createQueryBuilder()
+    if (committed_deals.length) {
+      this.#dealRepository
+        .createQueryBuilder()
         .update(Deal)
         .set({
-          status : DealStatus.Committed
+          status: DealStatus.Committed,
         })
-        .where(
-          {
-            txHash : In(committed_deals)
-          }
-        )
+        .where({
+          txHash: In(committed_deals),
+        })
     }
 
-    let cut_off_deals : Array<string> = input.filter(([_txHash,status]) => {
-      status===DealStatus.CutOff
-    }).map(([txHash, _status]) =>{
-      return txHash
-    })
+    let cut_off_deals: Array<string> = input
+      .filter(([_txHash, status]) => {
+        status === DealStatus.CutOff
+      })
+      .map(([txHash, _status]) => {
+        return txHash
+      })
 
-    if( cut_off_deals.length){
-      this.#dealRepository.createQueryBuilder()
+    if (cut_off_deals.length) {
+      this.#dealRepository
+        .createQueryBuilder()
         .update(Deal)
         .set({
-          status : DealStatus.CutOff
+          status: DealStatus.CutOff,
         })
-        .where(
-          {
-            txHash : In(cut_off_deals)
-          }
-        )
+        .where({
+          txHash: In(cut_off_deals),
+        })
     }
   }
 
   // if a deal is already marked 'Committed', all its ancestors must be 'Committed'
-  updateDealTxsChainsToCommited = async (deal : Deal) =>{
-    let pointer : Deal =deal
-    while(pointer.status ==DealStatus.Sent){
+  updateDealTxsChainsToCommited = async (deal: Deal) => {
+    let pointer: Deal = deal
+    while (pointer.status == DealStatus.Sent) {
       pointer.status = DealStatus.Committed
       pointer = await this.#dealRepository.saveDeal(pointer)
 

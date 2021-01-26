@@ -17,8 +17,7 @@ matcher_in_cell(ckb)                    matcher_out_cell(ckb)
 [removed_liquidity_cell]                [sudt_cell + ckb_cell]
 [add_liquidity_cell]                    [liquidity_cell + (sudt_cell或者ckb_cell)]
  */
-export class LiquidityAddTransformation implements Transformation{
-
+export class LiquidityAddTransformation implements Transformation {
   // for liquidity cell
   lptAmount: bigint
 
@@ -26,15 +25,14 @@ export class LiquidityAddTransformation implements Transformation{
   capacityChangeAmount: bigint
   sudtChangeAmount: bigint
 
+  request: LiquidityAddReq
+  processed: boolean
+  skip: boolean
 
-  request : LiquidityAddReq
-  processed :boolean
-  skip:boolean
-
-  outputLpt? :Lpt
-  outputSudtOrCkb? : Sudt | Ckb
-  constructor(request:LiquidityAddReq) {
-    this.request = request;
+  outputLpt?: Lpt
+  outputSudtOrCkb?: Sudt | Ckb
+  constructor(request: LiquidityAddReq) {
+    this.request = request
     this.lptAmount = 0n
     this.sudtChangeAmount = 0n
     this.capacityChangeAmount = 0n
@@ -42,15 +40,16 @@ export class LiquidityAddTransformation implements Transformation{
     this.skip = false
   }
 
-
-
-  process() : void {
-    if(!this.processed){
-      this.outputLpt = Lpt.from(this.lptAmount,this.request.originalUserLock)
-      if(this.sudtChangeAmount === 0n){
-        this.outputSudtOrCkb = Ckb.from(this.capacityChangeAmount - Lpt.LPT_FIXED_CAPACITY,this.request.originalUserLock)
-      }else{
-        this.outputSudtOrCkb = Sudt.from(this.sudtChangeAmount,this.request.originalUserLock)
+  process(): void {
+    if (!this.processed) {
+      this.outputLpt = Lpt.from(this.lptAmount, this.request.originalUserLock)
+      if (this.sudtChangeAmount === 0n) {
+        this.outputSudtOrCkb = Ckb.from(
+          this.capacityChangeAmount - Lpt.LPT_FIXED_CAPACITY,
+          this.request.originalUserLock,
+        )
+      } else {
+        this.outputSudtOrCkb = Sudt.from(this.sudtChangeAmount, this.request.originalUserLock)
       }
     }
   }
@@ -62,12 +61,12 @@ export class LiquidityAddTransformation implements Transformation{
   toCellOutput(): Array<CKBComponents.CellOutput> {
     this.process()
 
-    return [this.outputLpt!.toCellOutput(),this.outputSudtOrCkb!.toCellOutput()];
+    return [this.outputLpt!.toCellOutput(), this.outputSudtOrCkb!.toCellOutput()]
   }
 
   toCellOutputData(): Array<string> {
     this.process()
 
-    return [this.outputLpt!.toCellOutputData(),this.outputSudtOrCkb!.toCellOutputData()];
+    return [this.outputLpt!.toCellOutputData(), this.outputSudtOrCkb!.toCellOutputData()]
   }
 }

@@ -1,14 +1,20 @@
-import { CellCollector, Indexer } from '@ckb-lumos/indexer'
+import { CellCollector, Indexer } from '@ckb-lumos/sql-indexer'
+import knex from 'knex'
 import {
-  DEFAULT_NODE_URL,
-  INDEXER_DB_PATH,
+  INDEXER_MYSQL_DATABASE,
+  INDEXER_MYSQL_PASSWORD,
+  INDEXER_MYSQL_URL,
+  INDEXER_MYSQL_URL_PORT,
+  INDEXER_MYSQL_USERNAME,
+  INDEXER_URL,
   INFO_QUERY_OPTION,
   LIQUIDITY_ADD_REQ_QUERY_OPTION,
-  LIQUIDITY_REMOVE_REQ_QUERY_OPTION, MATCHER_QUERY_OPTION,
+  LIQUIDITY_REMOVE_REQ_QUERY_OPTION,
+  MATCHER_QUERY_OPTION,
   POOL_QUERY_OPTION,
   SWAP_BUY_REQ_QUERY_OPTION,
   SWAP_SELL_REQ_QUERY_OPTION,
-} from '../../utils'
+} from '../../utils/envs'
 import { SwapBuyReq } from '../models/cells/swapBuyReq'
 import { inject, injectable, LazyServiceIdentifer } from 'inversify'
 import { Info } from '../models/cells/info'
@@ -18,74 +24,59 @@ import { LiquidityAddReq } from '../models/cells/liquidityAddReq'
 import { MatcherChange } from '../models/cells/matcherChange'
 import RpcService from './rpcService'
 import { modules } from '../../container'
-import { Cell } from '@ckb-lumos/base'
 import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
 import { LiquidityRemoveTransformation } from '../models/transformation/liquidityRemoveTransformation'
 import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { SwapSellReq } from '../models/cells/swapSellReq'
+import { bigIntToHex } from '../../utils/tools'
 
 @injectable()
 export default class ScanService {
   readonly #indexer!: Indexer
   readonly #rpcService: RpcService
+  readonly #knex: knex
 
-
-  constructor(
-    @inject(new LazyServiceIdentifer(() => modules[RpcService.name])) rpcService: RpcService,
-  ) {
-    this.#indexer = new Indexer(DEFAULT_NODE_URL, INDEXER_DB_PATH)
-    this.#indexer.startForever()
+  constructor(@inject(new LazyServiceIdentifer(() => modules[RpcService.name])) rpcService: RpcService) {
+    // console.log('ScanService: CKB_NODE_URL: ' + INDEXER_URL)
+    // this.#indexer = new Indexer(INDEXER_URL, INDEXER_DB_PATH)
+    // this.#indexer.startForever()
     this.#rpcService = rpcService
-  }
 
-  startIndexer = () => {
-    if (!this.#indexer.running()) {
-      this.#indexer.startForever()
-    }
-  }
-
-  subscribeReqs = () => {
-    this.startIndexer()
-
-    const subscription_swap_buy_reqs = this.#indexer.subscribe(SWAP_BUY_REQ_QUERY_OPTION)
-
-    subscription_swap_buy_reqs.on('changed', () => {
-      //do nothing here cause we will poll it in cron jobs
+    const _knex_ = knex({
+      client: 'mysql',
+      connection: {
+        host: INDEXER_MYSQL_URL,
+        port: INDEXER_MYSQL_URL_PORT,
+        user: INDEXER_MYSQL_USERNAME,
+        password: INDEXER_MYSQL_PASSWORD,
+        database: INDEXER_MYSQL_DATABASE,
+      },
     })
 
-    const subscription_swap_sell_reqs = this.#indexer.subscribe(SWAP_SELL_REQ_QUERY_OPTION)
+    //_knex_.migrate.up();
+    this.#knex = _knex_
 
-    subscription_swap_sell_reqs.on('changed', () => {
-      //do nothing here cause we will poll it in cron jobs
-    })
-
-    const subscription_liquidity_add_reqs = this.#indexer.subscribe(LIQUIDITY_ADD_REQ_QUERY_OPTION)
-
-    subscription_liquidity_add_reqs.on('changed', () => {
-      //do nothing here cause we will poll it in cron jobs
-    })
-
-    const subscription_liquidity_remove_reqs = this.#indexer.subscribe(LIQUIDITY_REMOVE_REQ_QUERY_OPTION)
-
-    subscription_liquidity_remove_reqs.on('changed', () => {
-      //do nothing here cause we will poll it in cron jobs
-    })
+    this.#indexer = new Indexer(INDEXER_URL, this.#knex)
   }
 
   getTip = async (): Promise<bigint> => {
     return BigInt((await this.#indexer.tip()).block_number)
   }
 
-  scanAll = async (): Promise<[
-    Array<LiquidityAddTransformation>,
-    Array<LiquidityRemoveTransformation>,
-    Array<SwapBuyTransformation>,
-    Array<SwapSellTransformation>,
-    Info,
-    Pool,
-    MatcherChange]> => {
-    const tip = (await this.getTip()).toString(16)
+  scanAll = async (): Promise<
+    | [
+        Array<LiquidityAddTransformation>,
+        Array<LiquidityRemoveTransformation>,
+        Array<SwapBuyTransformation>,
+        Array<SwapSellTransformation>,
+        Info,
+        Pool,
+        MatcherChange,
+      ]
+    | null
+  > => {
+    const tip = bigIntToHex(await this.getTip())
 
     let [liquidityAddReqs, liquidityRemoveReqs, swapBuyReqs, swapSellReqs] = await this.scanReqs(tip)
     let matcherChange = await this.scanMatcherChange(tip)
@@ -96,106 +87,96 @@ export default class ScanService {
     let swapBuyTransformations = swapBuyReqs.map(req => new SwapBuyTransformation(req))
     let swapSellTransformations = swapSellReqs.map(req => new SwapSellTransformation(req))
 
-
-    return [liquidityAddTransformations, liquidityRemoveTransformations, swapBuyTransformations, swapSellTransformations,
-      info, pool, matcherChange]
+    return [
+      liquidityAddTransformations,
+      liquidityRemoveTransformations,
+      swapBuyTransformations,
+      swapSellTransformations,
+      info,
+      pool,
+      matcherChange,
+    ]
   }
 
   // be careful that the tip is hexicalDecimal
-  scanReqs = async (tip?: string): Promise<[
-    Array<LiquidityAddReq>,
-    Array<LiquidityRemoveReq>,
-    Array<SwapBuyReq>,
-    Array<SwapSellReq>
-  ]> => {
-    this.startIndexer()
-
-    const swapBuyReqCollector = new CellCollector(this.#indexer, {
+  scanReqs = async (
+    tip?: string,
+  ): Promise<[Array<LiquidityAddReq>, Array<LiquidityRemoveReq>, Array<SwapBuyReq>, Array<SwapSellReq>]> => {
+    const swapBuyReqCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...SWAP_BUY_REQ_QUERY_OPTION,
     })
     const swapBuyReqs: SwapBuyReq[] = []
     for await (const cell of swapBuyReqCollector.collect()) {
       // change to construct
-      if (isCellValid(cell)) {
 
-        const script = await this.#rpcService.getLockScript(cell.out_point!, SwapBuyReq.getUserLockHash(cell))
-        if (!script) {
-          continue
-        }
-        swapBuyReqs.push(new SwapBuyReq(cell, script!))
+      const script = await this.#rpcService.getLockScript(cell.out_point!, SwapBuyReq.getUserLockHash(cell))
+      if (!script) {
+        continue
       }
+      swapBuyReqs.push(new SwapBuyReq(cell, script!))
     }
     //==============
 
-    const swapSellReqCollector = new CellCollector(this.#indexer, {
+    const swapSellReqCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...SWAP_SELL_REQ_QUERY_OPTION,
     })
     const swapSellReqs: SwapSellReq[] = []
     for await (const cell of swapSellReqCollector.collect()) {
       // change to construct
-      if (isCellValid(cell)) {
 
-        const script = await this.#rpcService.getLockScript(cell.out_point!, SwapSellReq.getUserLockHash(cell))
-        if (!script) {
-          continue
-        }
+      const script = await this.#rpcService.getLockScript(cell.out_point!, SwapSellReq.getUserLockHash(cell))
+      if (!script) {
+        continue
+
         swapSellReqs.push(new SwapSellReq(cell, script!))
       }
     }
 
     //==============
-    const liquidityAddReqCollector = new CellCollector(this.#indexer,
-      {
-        toBlock: tip,
-        ...LIQUIDITY_ADD_REQ_QUERY_OPTION,
-      },
-    )
+    const liquidityAddReqCollector = new CellCollector(this.#knex, {
+      toBlock: tip,
+      ...LIQUIDITY_ADD_REQ_QUERY_OPTION,
+    })
     const liquidityAddReqs: Array<LiquidityAddReq> = []
     for await (const cell of liquidityAddReqCollector.collect()) {
-      if (isCellValid(cell)) {
-        const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityAddReq.getUserLockHash(cell))
-        if (!script) {
-          continue
-        }
-        liquidityAddReqs.push(new LiquidityAddReq(cell, script))
+      const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityAddReq.getUserLockHash(cell))
+      if (!script) {
+        continue
       }
+      liquidityAddReqs.push(new LiquidityAddReq(cell, script))
     }
 
     //==============
     const liquidityRemoveReqs: Array<LiquidityRemoveReq> = []
-    const liquidityRemoveReqCollector = new CellCollector(this.#indexer,
-      {
-        toBlock: tip,
-        ...LIQUIDITY_REMOVE_REQ_QUERY_OPTION,
-      },
-    )
+    const liquidityRemoveReqCollector = new CellCollector(this.#knex, {
+      toBlock: tip,
+      ...LIQUIDITY_REMOVE_REQ_QUERY_OPTION,
+    })
     for await (const cell of liquidityRemoveReqCollector.collect()) {
-      if (isCellValid(cell)) {
-        const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityRemoveReq.getUserLockHash(cell))
-        if (!script) {
-          continue
-        }
-        liquidityRemoveReqs.push(new LiquidityRemoveReq(cell, script))
+      const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityRemoveReq.getUserLockHash(cell))
+      if (!script) {
+        continue
       }
+      liquidityRemoveReqs.push(new LiquidityRemoveReq(cell, script))
     }
 
     return [liquidityAddReqs, liquidityRemoveReqs, swapBuyReqs, swapSellReqs]
   }
 
   scanMatcherChange = async (tip?: string): Promise<MatcherChange> => {
-    const MatcherCollector = new CellCollector(this.#indexer, {
+    const MatcherCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...MATCHER_QUERY_OPTION,
     })
     let matcherChange: MatcherChange | null = null
     for await (const cell of MatcherCollector.collect()) {
-      if (isCellValid(cell)) {
-        matcherChange =  MatcherChange.fromCell(cell)
-      }
+      console.log('scanMatcherChange: ' + JSON.stringify(cell, null, 2))
+
+      matcherChange = MatcherChange.fromCell(cell)
     }
-    if (!matcherChange ) {
+    if (!matcherChange) {
       throw new Error('matcher change not found')
     }
 
@@ -203,26 +184,22 @@ export default class ScanService {
   }
 
   scanInfoCell = async (tip?: string): Promise<[Info, Pool]> => {
-    const infoCellCollector = new CellCollector(this.#indexer, {
+    const infoCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...INFO_QUERY_OPTION,
     })
     let info: Info | null = null
     for await (const cell of infoCellCollector.collect()) {
-      if (isCellValid(cell)) {
-        info = Info.fromCell(cell)
-      }
+      info = Info.fromCell(cell)
     }
 
-    const poolCellCollector = new CellCollector(this.#indexer, {
+    const poolCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...POOL_QUERY_OPTION,
     })
     let pool: Pool | null = null
     for await (const cell of poolCellCollector.collect()) {
-      if (isCellValid(cell)) {
-        pool =  Pool.fromCell(cell)
-      }
+      pool = Pool.fromCell(cell)
     }
 
     if (!info || !pool) {
@@ -231,8 +208,4 @@ export default class ScanService {
 
     return [info!, pool!]
   }
-}
-
-function isCellValid(_cell: Cell) {
-  return true
 }

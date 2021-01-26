@@ -1,6 +1,6 @@
-import {  Uint128BigIntToLeHex, Uint64BigIntToLeHex } from '../../../utils/tools'
+import { Uint128BigIntToLeHex, Uint64BigIntToLeHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
-import { LPT_TYPE_SCRIPT } from '../../../utils'
+import { LPT_TYPE_SCRIPT } from '../../../utils/envs'
 
 // though LPT is a specific type of SUDT, we give it a unique class to represent
 // and note that the capacity is fixed to SUDT_CAPACITY = 154 * 10^8
@@ -15,7 +15,7 @@ type: - 65 bytes
 lock: user_lock
  */
 export class Lpt implements CellOutputType {
-  static LPT_FIXED_CAPACITY = BigInt(154 * 10 ^ 8)
+  static LPT_FIXED_CAPACITY = BigInt((154 * 10) ^ 8)
 
   lptAmount: bigint = 0n
   capacity: bigint = Lpt.LPT_FIXED_CAPACITY
@@ -30,7 +30,6 @@ export class Lpt implements CellOutputType {
   static from(lptAmount: bigint, originalUserLock: CKBComponents.Script): Lpt {
     return new Lpt(lptAmount, originalUserLock)
   }
-
 
   toCellOutput(): CKBComponents.CellOutput {
     return {

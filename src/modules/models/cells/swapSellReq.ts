@@ -35,55 +35,52 @@ lock: - 138 bytes
      | tips_sudt (16 bytes, 89..105)
  */
 // note that the capacity is fixed to WAP_ORDER_CAPACITY = 155 * 10^8
-export class SwapSellReq implements CellInputType{
+export class SwapSellReq implements CellInputType {
+  static SWAP_SELL_REQUEST_FIXED_CAPACITY = BigInt((227 * 10) ^ 8)
 
-  static SWAP_SELL_REQUEST_FIXED_CAPACITY = BigInt(227 * 10^8)
-
-  capacity: bigint;
+  capacity: bigint
   sudtAmount: bigint
   public userLockHash: string
-  version: string;
-  amountOutMin : bigint
+  version: string
+  amountOutMin: bigint
   sudtTypeHash: string
-  tips : bigint
-  tips_sudt : bigint
+  tips: bigint
+  tips_sudt: bigint
 
   outPoint: OutPoint
 
   originalUserLock: CKBComponents.Script
 
-  constructor(cell:Cell, script:CKBComponents.Script) {
-    this.capacity = BigInt(cell.cell_output.capacity);
+  constructor(cell: Cell, script: CKBComponents.Script) {
+    this.capacity = BigInt(cell.cell_output.capacity)
     this.sudtAmount = leHexToBigIntUint128(cell.cell_output.type!.args!)
 
     const args = cell.cell_output.lock.args.substring(2)
-    this.userLockHash = changeHexEncodeEndian(args.substring(0,64))
-    this.version = args.substring(64,66)
+    this.userLockHash = changeHexEncodeEndian(args.substring(0, 64))
+    this.version = args.substring(64, 66)
     // todo, do an overflow check for uint64 since capacity is uint64
-    this.amountOutMin = leHexToBigIntUint128(args.substring(66,98))
-    this.sudtTypeHash = changeHexEncodeEndian(args.substring(98,162))
-    this.tips = leHexToBigIntUint64(args.substring(162,178))
-    this.tips_sudt = leHexToBigIntUint128(args.substring(178,210))
+    this.amountOutMin = leHexToBigIntUint128(args.substring(66, 98))
+    this.sudtTypeHash = changeHexEncodeEndian(args.substring(98, 162))
+    this.tips = leHexToBigIntUint64(args.substring(162, 178))
+    this.tips_sudt = leHexToBigIntUint128(args.substring(178, 210))
 
     this.outPoint = cell.out_point!
     this.originalUserLock = script
   }
 
-  static validate(_cell:Cell){
-    return true;
+  static validate(_cell: Cell) {
+    return true
   }
 
-  static fromCell(cell:Cell,script:CKBComponents.Script):SwapSellReq|null{
-    if( ! SwapSellReq.validate(cell)){
+  static fromCell(cell: Cell, script: CKBComponents.Script): SwapSellReq | null {
+    if (!SwapSellReq.validate(cell)) {
       return null
     }
 
-    return new SwapSellReq(cell,script)
+    return new SwapSellReq(cell, script)
   }
-  static getUserLockHash(cell:Cell) : string{
-    return changeHexEncodeEndian(
-      cell.cell_output.lock.args.substring(2)
-        .substring(0,64))
+  static getUserLockHash(cell: Cell): string {
+    return changeHexEncodeEndian(cell.cell_output.lock.args.substring(2).substring(0, 64))
   }
 
   getOutPoint(): string {
