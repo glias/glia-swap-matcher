@@ -1,4 +1,4 @@
-import { Uint128BigIntToLeHex, Uint64BigIntToLeHex } from '../../../utils/tools'
+import { Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { SUDT_TYPE_SCRIPT } from '../../../utils/envs'
 
@@ -13,7 +13,7 @@ type: - 65 bytes
 lock: user_lock 65
  */
 export class Sudt implements CellOutputType {
-  static SUDT_FIXED_CAPACITY = BigInt((154 * 10) ^ 8)
+  static SUDT_FIXED_CAPACITY = BigInt(154 * 10 ** 8)
 
   sudtAmount: bigint = 0n
   capacity: bigint = Sudt.SUDT_FIXED_CAPACITY
@@ -31,13 +31,13 @@ export class Sudt implements CellOutputType {
 
   toCellOutput(): CKBComponents.CellOutput {
     return {
-      capacity: Uint64BigIntToLeHex(this.capacity),
+      capacity: Uint64BigIntToHex(this.capacity),
       type: SUDT_TYPE_SCRIPT,
       lock: this.originalUserLock,
     }
   }
 
   toCellOutputData(): string {
-    return `0x${Uint128BigIntToLeHex(this.sudtAmount)}`
+    return `${Uint128BigIntToLeHex(this.sudtAmount)}`
   }
 }

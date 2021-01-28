@@ -22,9 +22,9 @@ export default class TransactionService {
     if (!liquidityMatch.skip) {
       return [liquidityMatch.info, liquidityMatch.pool, liquidityMatch.matcherChange]
     }
-    const inputs: CKBComponents.CellInput[] = []
-    const outputs: CKBComponents.CellOutput[] = []
-    const outputsData: string[] = []
+    const inputs: Array<CKBComponents.CellInput> = []
+    let outputs: Array<CKBComponents.CellOutput> = []
+    let outputsData: Array<string> = []
 
     inputs.push(liquidityMatch.info.toCellInput())
     outputs.push(liquidityMatch.info.toCellOutput())
@@ -44,8 +44,8 @@ export default class TransactionService {
       }
 
       inputs.push(removeXform.toCellInput())
-      outputs.concat(removeXform.toCellOutput())
-      outputsData.concat(removeXform.toCellOutputData())
+      outputs = outputs.concat(removeXform.toCellOutput())
+      outputsData = outputsData.concat(removeXform.toCellOutputData())
     }
 
     for (let addXform of liquidityMatch.addXforms) {
@@ -54,8 +54,8 @@ export default class TransactionService {
       }
 
       inputs.push(addXform.toCellInput())
-      outputs.concat(addXform.toCellOutput())
-      outputsData.concat(addXform.toCellOutputData())
+      outputs = outputs.concat(addXform.toCellOutput())
+      outputsData = outputsData.concat(addXform.toCellOutputData())
     }
 
     // compose tx
@@ -82,9 +82,9 @@ export default class TransactionService {
     if (!swapMatch.skip) {
       return
     }
-    const inputs: CKBComponents.CellInput[] = []
-    const outputs: CKBComponents.CellOutput[] = []
-    const outputsData: string[] = []
+    const inputs: Array<CKBComponents.CellInput> = []
+    let outputs: Array<CKBComponents.CellOutput> = []
+    let outputsData: Array<string> = []
 
     inputs.push(swapMatch.info.toCellInput())
     outputs.push(swapMatch.info.toCellOutput())
@@ -104,8 +104,8 @@ export default class TransactionService {
       }
 
       inputs.push(buyXform.toCellInput())
-      outputs.concat(buyXform.toCellOutput())
-      outputsData.concat(buyXform.toCellOutputData())
+      outputs = outputs.concat(buyXform.toCellOutput())
+      outputsData = outputsData.concat(buyXform.toCellOutputData())
     }
 
     for (let sellXform of swapMatch.sellXforms) {
@@ -114,8 +114,8 @@ export default class TransactionService {
       }
 
       inputs.push(sellXform.toCellInput())
-      outputs.concat(sellXform.toCellOutput())
-      outputsData.concat(sellXform.toCellOutputData())
+      outputs = outputs.concat(sellXform.toCellOutput())
+      outputsData = outputsData.concat(sellXform.toCellOutputData())
     }
 
     const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
@@ -125,9 +125,9 @@ export default class TransactionService {
   }
 
   composeLiquidityInitTransaction = (liquidityMatch: LiquidityMatch): void => {
-    const inputs: CKBComponents.CellInput[] = []
-    const outputs: CKBComponents.CellOutput[] = []
-    const outputsData: string[] = []
+    const inputs: Array<CKBComponents.CellInput> = []
+    let outputs: Array<CKBComponents.CellOutput> = []
+    let outputsData: Array<string> = []
 
     inputs.push(liquidityMatch.info.toCellInput())
     outputs.push(liquidityMatch.info.toCellOutput())
@@ -142,10 +142,11 @@ export default class TransactionService {
     outputsData.push(liquidityMatch.matcherChange.toCellOutputData())
 
     inputs.push(liquidityMatch.initXforms!.toCellInput())
-    outputs.concat(liquidityMatch.initXforms!.toCellOutput())
-    outputsData.concat(liquidityMatch.initXforms!.toCellOutputData())
+    outputs = outputs.concat(liquidityMatch.initXforms!.toCellOutput())
+    outputsData = outputsData.concat(liquidityMatch.initXforms!.toCellOutputData())
 
     const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
+    console.log('composed tx: ' + JSON.stringify(signedTx, null, 2))
 
     liquidityMatch.composedTx = signedTx
     liquidityMatch.composedTxHash = txHash
@@ -178,7 +179,8 @@ export default class TransactionService {
 
     const signedTx: any = {
       ...rawTransaction,
-      witnesses: [witness, ...rawTransaction.witnesses.slice(1)],
+      //witnesses: [witness, ...rawTransaction.witnesses.slice(1)],
+      witnesses: [...rawTransaction.witnesses.slice(0, 2), witness, ...rawTransaction.witnesses.slice(3)],
     }
     return [signedTx, txHash]
   }

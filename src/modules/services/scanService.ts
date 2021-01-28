@@ -172,9 +172,8 @@ export default class ScanService {
     })
     let matcherChange: MatcherChange | null = null
     for await (const cell of MatcherCollector.collect()) {
-      console.log('scanMatcherChange: ' + JSON.stringify(cell, null, 2))
-
       matcherChange = MatcherChange.fromCell(cell)
+      break
     }
     if (!matcherChange) {
       throw new Error('matcher change not found')
@@ -184,22 +183,27 @@ export default class ScanService {
   }
 
   scanInfoCell = async (tip?: string): Promise<[Info, Pool]> => {
+    //console.log("INFO_QUERY_OPTION: "+JSON.stringify(INFO_QUERY_OPTION,null,2))
     const infoCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...INFO_QUERY_OPTION,
     })
     let info: Info | null = null
     for await (const cell of infoCellCollector.collect()) {
+      //console.log("info cell: "+ JSON.stringify(cell))
       info = Info.fromCell(cell)
+      break
     }
-
+    //console.log("POOL_QUERY_OPTION: "+JSON.stringify(POOL_QUERY_OPTION,null,2))
     const poolCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...POOL_QUERY_OPTION,
     })
     let pool: Pool | null = null
     for await (const cell of poolCellCollector.collect()) {
+      //console.log("pool cell: "+ JSON.stringify(cell))
       pool = Pool.fromCell(cell)
+      break
     }
 
     if (!info || !pool) {
