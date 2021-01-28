@@ -6,7 +6,11 @@ import { NODE_ENV } from '../../utils/envs'
 
 @injectable()
 export default class DealService {
-  #dealRepository = getConnection(NODE_ENV).getCustomRepository(DealRepository)
+  #dealRepository: DealRepository
+
+  constructor() {
+    this.#dealRepository = getConnection(NODE_ENV).getCustomRepository(DealRepository)
+  }
 
   getAllSentDeals = async (): Promise<Array<Deal>> => {
     return await this.#dealRepository.getAllSentDeals()

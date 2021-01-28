@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm'
+import { Entity, Column, CreateDateColumn, Unique, Index, PrimaryGeneratedColumn } from 'typeorm'
 
 /*
         /------> Missing       <--\
@@ -12,12 +12,14 @@ export enum DealStatus {
 }
 
 @Entity()
+@Unique(['txHash'])
 export class Deal {
-  @Column('varchar', { name: 'id', generated: 'increment' })
+  @Index({ unique: true })
+  @PrimaryGeneratedColumn('increment', { name: 'id' })
   id!: string
 
   // this deal's tx hash
-  @PrimaryColumn('varchar', { name: 'tx_hash' })
+  @Column('varchar', { name: 'tx_hash' })
   txHash!: string
 
   // easy for backwards retrieve

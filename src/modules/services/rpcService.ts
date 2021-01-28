@@ -30,6 +30,10 @@ export default class RpcService {
     })
   }
 
+  getTx = async (txHash: string): Promise<CKBComponents.TransactionWithStatus> => {
+    return await this.#client.getTransaction(txHash)
+  }
+
   // give an outpoint of certain cell, find a lockscript fromCell the tx inside the
   // the outpoint which matches target hash
   getLockScript = async (outPoint: OutPoint, lockScriptHash: string): Promise<CKBComponents.Script | null> => {
@@ -37,7 +41,7 @@ export default class RpcService {
     for (let input of tx.transaction.inputs) {
       const pre_tx = await this.#client.getTransaction(input.previousOutput!.txHash)
       const outputCell = pre_tx.transaction.outputs[Number(input.previousOutput!.index)]
-      if (scriptToHash(outputCell.lock) === lockScriptHash) {
+      if (scriptToHash(outputCell.lock).toLowerCase() === lockScriptHash.toLowerCase()) {
         return outputCell.lock
       }
     }
@@ -45,6 +49,10 @@ export default class RpcService {
   }
 
   sendTransaction = async (rawTx: CKBComponents.RawTransaction): Promise<void> => {
-    await this.#client.sendTransaction(rawTx)
+    try {
+      await this.#client.sendTransaction(rawTx)
+    } catch (e) {
+      console.log('sendTransaction error: ' + e)
+    }
   }
 }

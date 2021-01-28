@@ -31,6 +31,8 @@ export default class TaskService {
 
   readonly #schedule = '*/5 * * * * *'
 
+  #cronLock: boolean = false
+
   #info = (msg: string) => {
     logger.info(`${logTag}: ${msg}`)
   }
@@ -59,11 +61,25 @@ export default class TaskService {
   //如果订阅的changed事件收到,则提前读取req cells
 
   start = async () => {
-    new CronJob(this.#schedule, this.task, null, true)
+    new CronJob(this.#schedule, this.wrapperedTask, null, true)
+  }
+
+  readonly wrapperedTask = async () => {
+    if (!this.#cronLock) {
+      this.#cronLock = true
+      try {
+        await this.task()
+      } catch (e) {
+        console.log('task job error: ' + e)
+      } finally {
+        this.#cronLock = false
+      }
+    }
   }
 
   // 定时启动
   readonly task = async () => {
+    console.log('task job: ' + new Date())
     // step 1, get latest info cell and scan all reqs
 
     // step 2
@@ -91,10 +107,6 @@ export default class TaskService {
       return
     }
     let [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = scanRes
-
-    // check if we are in Init mode
-    if (info.ckbReserve === 0n || info.sudtReserve === 0n) {
-    }
 
     // use the info's outpoint to search our db
     // the result may be null, may present with Committed, or may present with Sent

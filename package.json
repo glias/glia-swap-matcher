@@ -7,15 +7,17 @@
     "node": ">=12 <13"
   },
   "scripts": {
-    "start": "cross-env NODE_ENV=development ts-node src/index",
+    "start:dev": "cross-env NODE_ENV=development ts-node src/index",
+    "start:prod": "cross-env NODE_ENV=production ts-node src/index",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "build": "cross-env NODE_ENV=production yarn run tsc",
-    "clean": "npx rimraf lib && npx rimraf tsconfig.tsbuildinfo",
+    "build:dev": "cross-env NODE_ENV=development yarn run tsc",
+    "build:prod": "cross-env NODE_ENV=production yarn run tsc",
+    "clean": "npx rimraf lib && npx rimraf tsconfig.tsbuildinfo && npx rimraf src/migrations",
     "format": "prettier -w --ignore-unknown src/**/*",
-    "db:init": "typeorm migration:generate -c production -n CreateDatabase -d src/migrations && typeorm -c production migration:run",
-    "init": "npm run build && npm run db:init && npm run build"
+    "db:init:dev": "npm run build:dev && typeorm migration:generate -c development -d src/migrations -n InitDb && npm run build:dev && typeorm -c development migration:run",
+    "db:init:prod": "npm run build:prod && typeorm migration:generate -c production -d src/migrations -n InitDb && npm run build:prod && typeorm -c production migration:run"
   },
   "husky": {
     "hooks": {
@@ -52,8 +54,6 @@
   },
   "dependencies": {
     "@ckb-lumos/sql-indexer": "0.14.2-rc6",
-    "knex": "^0.21.15",
-    "mysql": "^2.18.1",
     "@nervosnetwork/ckb-sdk-core": "0.39",
     "@nervosnetwork/ckb-sdk-rpc": "0.39",
     "@nervosnetwork/ckb-sdk-utils": "0.39",
@@ -63,6 +63,8 @@
     "cron": "1.8.2",
     "dotenv": "8.2.0",
     "inversify": "5.0.5",
+    "knex": "^0.21.15",
+    "mysql": "^2.18.1",
     "reflect-metadata": "0.1.13",
     "socket.io": "2.3.0",
     "sqlite3": "5.0.0",

@@ -6,10 +6,10 @@ type null
 data null
 */
 import { CellOutputType } from './interfaces/CellOutputType'
-import { Uint64BigIntToLeHex } from '../../../utils/tools'
+import { Uint64BigIntToHex } from '../../../utils/tools'
 
 export class Ckb implements CellOutputType {
-  static CKB_FIXED_MIN_CAPACITY = BigInt((73 * 10) ^ 8)
+  static CKB_FIXED_MIN_CAPACITY = BigInt(73 * 10 ** 8)
 
   // the capacity, which is all the ckb_amount this cell holds
   capacity: bigint = 0n
@@ -26,13 +26,13 @@ export class Ckb implements CellOutputType {
 
   toCellOutput(): CKBComponents.CellOutput {
     return {
-      capacity: Uint64BigIntToLeHex(this.capacity),
+      capacity: Uint64BigIntToHex(this.capacity),
       type: null,
       lock: this.originalUserLock,
     }
   }
 
   toCellOutputData(): string {
-    return `0x`
+    return ``
   }
 }

@@ -1,5 +1,5 @@
 import type { Cell } from '@ckb-lumos/base'
-import { changeHexEncodeEndian, leHexToBigIntUint128, leHexToBigIntUint64, scriptHash } from '../../../utils/tools'
+import { leHexToBigIntUint128, leHexToBigIntUint64, prepare0xPrefix, scriptHash } from '../../../utils/tools'
 import { SUDT_TYPE_SCRIPT_HASH } from '../../../utils/envs'
 import { CellInputType } from './interfaces/CellInputType'
 import { OutPoint } from '@ckb-lumos/base'
@@ -53,13 +53,13 @@ export class LiquidityAddReq implements CellInputType {
     this.capacityAmount = BigInt(cell.cell_output.capacity)
 
     const args = cell.cell_output.lock.args.substring(2)
-    this.userLockHash = changeHexEncodeEndian(args.substring(0, 64))
+    this.userLockHash = args.substring(0, 64)
     this.version = args.substring(64, 66)
 
     this.sudtMin = leHexToBigIntUint128(args.substring(66, 98))
     this.ckbMin = leHexToBigIntUint64(args.substring(98, 114))
 
-    this.infoTypeHash = changeHexEncodeEndian(args.substring(114, 178))
+    this.infoTypeHash = args.substring(114, 178)
 
     this.tips = leHexToBigIntUint64(args.substring(178, 194))
     this.tipsSudt = leHexToBigIntUint128(args.substring(194, 226))
@@ -91,7 +91,7 @@ export class LiquidityAddReq implements CellInputType {
     return true
   }
   static getUserLockHash(cell: Cell): string {
-    return changeHexEncodeEndian(cell.cell_output.lock.args.substring(2).substring(0, 64))
+    return prepare0xPrefix(cell.cell_output.lock.args.substring(2).substring(0, 64))
   }
 
   toCellInput(): CKBComponents.CellInput {
@@ -100,7 +100,7 @@ export class LiquidityAddReq implements CellInputType {
         txHash: this.outPoint.tx_hash,
         index: this.outPoint.index,
       },
-      since: '0x00',
+      since: '0x0',
     }
   }
 
