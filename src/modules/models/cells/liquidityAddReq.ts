@@ -24,8 +24,7 @@ lock: - 146 bytes
 
  */
 export class LiquidityAddReq implements CellInputType {
-  //static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt(235 * 10 ^ 8)
-  static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt(243 * 10 ** 8)
+  static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt((235 * 10) ^ 8)
 
   // given sudt for add
   sudtAmount: bigint
@@ -50,24 +49,6 @@ export class LiquidityAddReq implements CellInputType {
   outPoint: OutPoint
 
   constructor(cell: Cell, script: CKBComponents.Script) {
-    // this.sudtAmount = leHexToBigIntUint128(cell.data)
-    // this.capacityAmount = BigInt(cell.cell_output.capacity)
-    //
-    // const args = cell.cell_output.lock.args.substring(2)
-    // this.userLockHash = args.substring(0, 64)
-    // this.version = args.substring(64, 66)
-    //
-    // this.sudtMin = leHexToBigIntUint128(args.substring(66, 98))
-    // this.ckbMin = leHexToBigIntUint64(args.substring(98, 114))
-    //
-    // this.infoTypeHash = args.substring(114, 178)
-    //
-    // this.tips = leHexToBigIntUint64(args.substring(178, 194))
-    // this.tipsSudt = leHexToBigIntUint128(args.substring(194, 226))
-    //
-    // this.outPoint = cell.out_point!
-    // this.originalUserLock = script
-
     this.sudtAmount = leHexToBigIntUint128(cell.data)
     this.capacityAmount = BigInt(cell.cell_output.capacity)
 
@@ -76,12 +57,12 @@ export class LiquidityAddReq implements CellInputType {
     this.version = args.substring(64, 66)
 
     this.sudtMin = leHexToBigIntUint128(args.substring(66, 98))
-    this.ckbMin = leHexToBigIntUint128(args.substring(98, 130))
+    this.ckbMin = leHexToBigIntUint64(args.substring(98, 114))
 
-    this.infoTypeHash = args.substring(130, 194)
+    this.infoTypeHash = args.substring(114, 178)
 
-    this.tips = leHexToBigIntUint64(args.substring(194, 210))
-    this.tipsSudt = leHexToBigIntUint128(args.substring(210, 242))
+    this.tips = leHexToBigIntUint64(args.substring(178, 194))
+    this.tipsSudt = leHexToBigIntUint128(args.substring(194, 226))
 
     this.outPoint = cell.out_point!
     this.originalUserLock = script

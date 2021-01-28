@@ -61,9 +61,9 @@ export class Info implements CellInputType, CellOutputType {
   }
 
   static validate(cell: Cell): boolean {
-    // if (BigInt(cell.cell_output.capacity) !== Info.INFO_FIXED_CAPACITY) {
-    //   return false
-    // }
+    if (BigInt(cell.cell_output.capacity) !== Info.INFO_FIXED_CAPACITY) {
+      return false
+    }
 
     // for liquidity_sudt_type_hash field in data
     if (cell.data.substring(2).substring(96, 160) !== remove0xPrefix(LPT_TYPE_SCRIPT_HASH)) {
