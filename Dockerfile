@@ -9,7 +9,7 @@ ADD tsconfig.json .
 ADD src ./src
 
 RUN yarn install
-RUN yarn build
+RUN yarn build:dev
 
 EXPOSE 8080
 
