@@ -18,8 +18,7 @@ import { LiquidityMatch } from '../models/matches/liquidityMatch'
 import { SwapMatch } from '../models/matches/swapMatch'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
-
-const logTag = `\x1b[35m[Tasks Service]\x1b[0m`
+import JSONbig from 'json-bigint'
 
 @injectable()
 export default class TaskService {
@@ -31,12 +30,15 @@ export default class TaskService {
 
   readonly #schedule = '*/5 * * * * *'
 
+  #cronLock: boolean = false
+
   #info = (msg: string) => {
-    logger.info(`${logTag}: ${msg}`)
+    logger.info(`TaskService: ${msg}`)
   }
-  #warn = (msg: string) => {
-    logger.warn(`${logTag}: ${msg}`)
+  #error = (msg: string) => {
+    logger.error(`TaskService: ${msg}`)
   }
+
 
   constructor(
     @inject(new LazyServiceIdentifer(() => modules[ScanService.name])) scanService: ScanService,
@@ -45,9 +47,6 @@ export default class TaskService {
     @inject(new LazyServiceIdentifer(() => modules[MatcherService.name])) matcherService: MatcherService,
     @inject(new LazyServiceIdentifer(() => modules[TransactionService.name])) transactionService: TransactionService,
   ) {
-    this.#info('')
-    this.#warn('')
-
     this.#scanService = scanService
     this.#dealService = dealService
     this.#rpcService = rpcService
@@ -59,11 +58,25 @@ export default class TaskService {
   //如果订阅的changed事件收到,则提前读取req cells
 
   start = async () => {
-    new CronJob(this.#schedule, this.task, null, true)
+    new CronJob(this.#schedule, this.wrapperedTask, null, true)
+  }
+
+  readonly wrapperedTask = async () => {
+    if (!this.#cronLock) {
+      this.#cronLock = true
+      try {
+        await this.task()
+      } catch (e) {
+        this.#error('task job error: ' + e)
+      } finally {
+        this.#cronLock = false
+      }
+    }
   }
 
   // 定时启动
   readonly task = async () => {
+    this.#info('task job: ' + new Date())
     // step 1, get latest info cell and scan all reqs
 
     // step 2
@@ -92,10 +105,6 @@ export default class TaskService {
     }
     let [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = scanRes
 
-    // check if we are in Init mode
-    if (info.ckbReserve === 0n || info.sudtReserve === 0n) {
-    }
-
     // use the info's outpoint to search our db
     // the result may be null, may present with Committed, or may present with Sent
     const dealRes: Deal | null = await this.#dealService.getByTxHash(info.outPoint.tx_hash)
@@ -110,9 +119,9 @@ export default class TaskService {
         let sent_deals_txHashes = sentDeals.map(deal => deal.txHash)
         // get all status of our sent deal txs and update them
         // some maybe set to committed
-        // some maybe set to cut-off
+        // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
         let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
-        this.#dealService.updateDealsStatus(sentDealsStatus)
+        await this.#dealService.updateDealsStatus(sentDealsStatus)
       }
 
       // based on the current situation, do a new matching job
@@ -123,7 +132,7 @@ export default class TaskService {
 
       // 1st, the deals includes the info.txHash and all previous is definitely committed
       // update all the tx and its pre-txs to committed
-      this.#dealService.updateDealTxsChainsToCommited(dealRes)
+      await this.#dealService.updateDealTxsChainsToCommited(dealRes)
 
       // 2nd, get the latest sent deal by sort 'id'
       let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
@@ -156,7 +165,7 @@ export default class TaskService {
 
         if (fine) {
           // re-send the deal tx and remove those reqs in the request list
-          await this.#rpcService.sendTransaction(JSON.parse(sentDeal.tx))
+          await this.#rpcService.sendTransaction(JSONbig.parse(sentDeal.tx))
 
           addXforms = addXforms.filter(addXform => !sentReqOutpoints.includes(addXform.request.getOutPoint()))
           removeXforms = removeXforms.filter(
@@ -204,19 +213,19 @@ export default class TaskService {
         liquidityMatch.removeXforms.map(xform => xform.request.getOutPoint()),
       )
 
+      await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
+
       const deal: Omit<Deal, 'createdAt' | 'id'> = {
         txHash: liquidityMatch.composedTxHash!,
         preTxHash: liquidityMatch.info.outPoint.tx_hash,
-        tx: JSON.stringify(liquidityMatch.composedTx),
-        info: JSON.stringify(liquidityMatch.info),
-        pool: JSON.stringify(liquidityMatch.pool),
-        matcherChange: JSON.stringify(liquidityMatch.matcherChange),
+        tx: JSONbig.stringify(liquidityMatch.composedTx),
+        info: JSONbig.stringify(liquidityMatch.info),
+        pool: JSONbig.stringify(liquidityMatch.pool),
+        matcherChange: JSONbig.stringify(liquidityMatch.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
       await this.#dealService.saveDeal(deal)
-
-      await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
     }
 
     // the info, pool, and matcherChange should base on liquidity tx
@@ -232,19 +241,19 @@ export default class TaskService {
       outpointsProcessed = outpointsProcessed.concat(swapMatch.buyXforms.map(xform => xform.request.getOutPoint()))
       outpointsProcessed = outpointsProcessed.concat(swapMatch.sellXforms.map(xform => xform.request.getOutPoint()))
 
+      await this.#rpcService.sendTransaction(swapMatch.composedTx!)
+
       const deal: Omit<Deal, 'createdAt' | 'id'> = {
         txHash: swapMatch.composedTxHash!,
         preTxHash: swapMatch.info.outPoint.tx_hash,
-        tx: JSON.stringify(swapMatch.composedTx),
-        info: JSON.stringify(swapMatch.info),
-        pool: JSON.stringify(swapMatch.pool),
-        matcherChange: JSON.stringify(swapMatch.matcherChange),
+        tx: JSONbig.stringify(swapMatch.composedTx),
+        info: JSONbig.stringify(swapMatch.info),
+        pool: JSONbig.stringify(swapMatch.pool),
+        matcherChange: JSONbig.stringify(swapMatch.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
       await this.#dealService.saveDeal(deal)
-
-      await this.#rpcService.sendTransaction(swapMatch.composedTx!)
     }
   }
   handlerInit = async (
@@ -263,6 +272,8 @@ export default class TaskService {
     liquidityMatch.initXforms = new LiquidityInitTransformation(addXforms[0].request)
 
     this.#matcherService.initLiquidity(liquidityMatch)
+    liquidityMatch.matcherChange.reduceBlockMinerFee()
+
     this.#transactionService.composeLiquidityInitTransaction(liquidityMatch)
     await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
   }

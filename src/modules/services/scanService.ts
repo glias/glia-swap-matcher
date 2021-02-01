@@ -30,6 +30,8 @@ import { SwapBuyTransformation } from '../models/transformation/swapBuyTransform
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { SwapSellReq } from '../models/cells/swapSellReq'
 import { bigIntToHex } from '../../utils/tools'
+import JSONbig from 'json-bigint'
+import { logger } from '../../utils/logger'
 
 @injectable()
 export default class ScanService {
@@ -37,13 +39,19 @@ export default class ScanService {
   readonly #rpcService: RpcService
   readonly #knex: knex
 
+  #info = (msg: string) => {
+    logger.info(`ScanService: ${msg}`)
+  }
+  // @ts-ignore
+  #error = (msg: string) => {
+    logger.error(`ScanService: ${msg}`)
+  }
+
+
   constructor(@inject(new LazyServiceIdentifer(() => modules[RpcService.name])) rpcService: RpcService) {
-    // console.log('ScanService: CKB_NODE_URL: ' + INDEXER_URL)
-    // this.#indexer = new Indexer(INDEXER_URL, INDEXER_DB_PATH)
-    // this.#indexer.startForever()
     this.#rpcService = rpcService
 
-    const _knex_ = knex({
+    this.#knex =  knex({
       client: 'mysql',
       connection: {
         host: INDEXER_MYSQL_URL,
@@ -52,10 +60,7 @@ export default class ScanService {
         password: INDEXER_MYSQL_PASSWORD,
         database: INDEXER_MYSQL_DATABASE,
       },
-    })
-
-    //_knex_.migrate.up();
-    this.#knex = _knex_
+    });
 
     this.#indexer = new Indexer(INDEXER_URL, this.#knex)
   }
@@ -129,9 +134,8 @@ export default class ScanService {
       const script = await this.#rpcService.getLockScript(cell.out_point!, SwapSellReq.getUserLockHash(cell))
       if (!script) {
         continue
-
-        swapSellReqs.push(new SwapSellReq(cell, script!))
       }
+      swapSellReqs.push(new SwapSellReq(cell, script!))
     }
 
     //==============
@@ -172,9 +176,8 @@ export default class ScanService {
     })
     let matcherChange: MatcherChange | null = null
     for await (const cell of MatcherCollector.collect()) {
-      console.log('scanMatcherChange: ' + JSON.stringify(cell, null, 2))
-
       matcherChange = MatcherChange.fromCell(cell)
+      break
     }
     if (!matcherChange) {
       throw new Error('matcher change not found')
@@ -191,7 +194,10 @@ export default class ScanService {
     let info: Info | null = null
     for await (const cell of infoCellCollector.collect()) {
       info = Info.fromCell(cell)
+      this.#info('info cell: ' + JSONbig.stringify(info, null, 2))
+      break
     }
+
 
     const poolCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
@@ -199,7 +205,9 @@ export default class ScanService {
     })
     let pool: Pool | null = null
     for await (const cell of poolCellCollector.collect()) {
+      this.#info("pool cell: "+ JSONbig.stringify(cell,null,2))
       pool = Pool.fromCell(cell)
+      break
     }
 
     if (!info || !pool) {

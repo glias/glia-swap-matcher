@@ -45,6 +45,7 @@ export class LiquidityRemoveTransformation implements Transformation {
       this.output_sudt = Sudt.from(this.sudtAmount, this.request.originalUserLock)
       this.output_ckb = Ckb.from(this.capacityAmount - Sudt.SUDT_FIXED_CAPACITY, this.request.originalUserLock)
     }
+    this.processed = true
   }
 
   toCellInput(): CKBComponents.CellInput {

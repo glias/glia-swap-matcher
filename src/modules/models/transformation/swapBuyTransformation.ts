@@ -30,6 +30,7 @@ export class SwapBuyTransformation implements Transformation {
     if (!this.processed) {
       this.outputSudt = Sudt.from(this.sudtAmount, this.request.originalUserLock)
     }
+    this.processed = true
   }
 
   toCellInput(): CKBComponents.CellInput {

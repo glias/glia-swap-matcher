@@ -1,7 +1,8 @@
 import winston, { format, transports } from 'winston'
 
 export const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
-  format: format.combine(format.colorize(), format.simple()),
-  transports: [new transports.Console(), new transports.File({ filename: 'error.log', level: 'error' })],
+  // do not depend to envs.ts to eliminate cross dependencies
+  level: process.env.LOG_LEVEL,
+  format: format.combine(format.simple()),
+  transports: [new transports.Console({level:process.env.LOG_LEVEL}), new transports.File({ filename: 'log.log', level: process.env.FILE_LOG_LEVEL })],
 })

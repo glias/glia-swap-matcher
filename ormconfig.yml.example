@@ -1,0 +1,31 @@
+production:
+  type: sqlite
+  name: production
+  database: db/glia-amm.sqlite3.production
+  entities:
+    - lib/**/*.entity.js
+  migrations:
+    - lib/migrations/*.js
+  cli:
+    migrationsDir: lib/migrations
+  logging: false
+  synchronize: false
+  migrationsRun: false
+
+development:
+  type: sqlite
+  name: development
+  database: db/glia-amm.sqlite3.development
+  entities:
+    - src/**/*.entity.ts
+  logging: true
+  logger: advanced-console
+  synchronize: false
+
+test:
+  type: sqlite
+  name: test
+  database: ':memory:'
+  entities:
+    - src/**/*.entity.ts
+  synchronize: true

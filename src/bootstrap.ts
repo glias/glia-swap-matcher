@@ -7,20 +7,16 @@ import { logger } from './utils/logger'
 import { NODE_ENV } from './utils/envs'
 
 
-
-const logTag = `\x1b[35m[Bootstrap]\x1b[0m`
-
 const registerModule = async (modulePath: string) => {
   const { default: m } = await import(modulePath)
   modules[m.name] = Symbol(m.name)
   container.bind(modules[m.name]).to(m)
-  logger.debug(`${logTag}: \x1b[36m${m.name}\x1b[0m is loaded`)
 }
 
 const connectDatabase = async () => {
 
   const connection = await createConnection(NODE_ENV)
-  logger.debug(`${logTag}: Connected to database \x1b[36m${connection.name}\x1b[0m`)
+  logger.debug(`database connected to ${connection.name}`)
   return connection
 }
 
@@ -37,15 +33,12 @@ const bootstrap = async () => {
     for (const injectablePath of injectablePaths) {
       try{
         await registerModule(injectablePath)
-        logger.info(`registered module: ${injectablePath}`)
+        logger.info(`inversify: registered module: ${injectablePath}`)
       }catch (e){
         // we just skip for files don't have injectables :)
       }
     }
   }
-
-
-
   await connectDatabase()
 }
 

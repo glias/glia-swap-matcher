@@ -1,9 +1,10 @@
 import { Cell, OutPoint } from '@ckb-lumos/base'
-import { Uint64BigIntToLeHex } from '../../../utils/tools'
+import { Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
 import { BLOCK_MINER_FEE, MATCHER_LOCK_SCRIPT } from '../../../utils/envs'
 import { Ckb } from './ckb'
+import JSONbig from 'json-bigint'
 
 // for tips, matcherChange only hold ckbs
 // thought matcherChange is as same as Ckb, we give it a special class
@@ -16,7 +17,7 @@ type: - null
 lock: user_lock 65
  */
 export class MatcherChange implements CellInputType, CellOutputType {
-  static MATCHER_CHANGE_FIXED_CAPACITY = BigInt((73 * 10) ^ 8)
+  static MATCHER_CHANGE_FIXED_CAPACITY = BigInt(73 * 10 ** 8)
 
   capacity: bigint
 
@@ -55,7 +56,7 @@ export class MatcherChange implements CellInputType, CellOutputType {
   }
 
   static cloneWith(matcherChange: MatcherChange, txHash: string, index: string): MatcherChange {
-    matcherChange = JSON.parse(JSON.stringify(matcherChange))
+    matcherChange = JSONbig.parse(JSONbig.stringify(matcherChange))
     matcherChange.outPoint.tx_hash = txHash
     matcherChange.outPoint.index = index
     return matcherChange
@@ -67,13 +68,13 @@ export class MatcherChange implements CellInputType, CellOutputType {
         txHash: this.outPoint.tx_hash,
         index: this.outPoint.index,
       },
-      since: '0x00',
+      since: '0x0',
     }
   }
 
   toCellOutput(): CKBComponents.CellOutput {
     return {
-      capacity: Uint64BigIntToLeHex(this.capacity),
+      capacity: Uint64BigIntToHex(this.capacity),
       type: null,
       lock: MATCHER_LOCK_SCRIPT,
     }

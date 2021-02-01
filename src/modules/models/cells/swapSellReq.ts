@@ -1,5 +1,5 @@
 import type { Cell } from '@ckb-lumos/base'
-import { changeHexEncodeEndian, leHexToBigIntUint128, leHexToBigIntUint64 } from '../../../utils/tools'
+import { leHexToBigIntUint128, leHexToBigIntUint64, prepare0xPrefix } from '../../../utils/tools'
 import { CellInputType } from './interfaces/CellInputType'
 import { OutPoint } from '@ckb-lumos/base'
 
@@ -36,7 +36,7 @@ lock: - 138 bytes
  */
 // note that the capacity is fixed to WAP_ORDER_CAPACITY = 155 * 10^8
 export class SwapSellReq implements CellInputType {
-  static SWAP_SELL_REQUEST_FIXED_CAPACITY = BigInt((227 * 10) ^ 8)
+  static SWAP_SELL_REQUEST_FIXED_CAPACITY = BigInt(227 * 10 ** 8)
 
   capacity: bigint
   sudtAmount: bigint
@@ -53,14 +53,14 @@ export class SwapSellReq implements CellInputType {
 
   constructor(cell: Cell, script: CKBComponents.Script) {
     this.capacity = BigInt(cell.cell_output.capacity)
-    this.sudtAmount = leHexToBigIntUint128(cell.cell_output.type!.args!)
+    this.sudtAmount = leHexToBigIntUint128(cell.data)
 
     const args = cell.cell_output.lock.args.substring(2)
-    this.userLockHash = changeHexEncodeEndian(args.substring(0, 64))
+    this.userLockHash = args.substring(0, 64)
     this.version = args.substring(64, 66)
     // todo, do an overflow check for uint64 since capacity is uint64
     this.amountOutMin = leHexToBigIntUint128(args.substring(66, 98))
-    this.sudtTypeHash = changeHexEncodeEndian(args.substring(98, 162))
+    this.sudtTypeHash = args.substring(98, 162)
     this.tips = leHexToBigIntUint64(args.substring(162, 178))
     this.tips_sudt = leHexToBigIntUint128(args.substring(178, 210))
 
@@ -80,7 +80,7 @@ export class SwapSellReq implements CellInputType {
     return new SwapSellReq(cell, script)
   }
   static getUserLockHash(cell: Cell): string {
-    return changeHexEncodeEndian(cell.cell_output.lock.args.substring(2).substring(0, 64))
+    return prepare0xPrefix(cell.cell_output.lock.args.substring(2).substring(0, 64))
   }
 
   getOutPoint(): string {
@@ -93,7 +93,7 @@ export class SwapSellReq implements CellInputType {
         txHash: this.outPoint.tx_hash,
         index: this.outPoint.index,
       },
-      since: '0x00',
+      since: '0x0',
     }
   }
 }

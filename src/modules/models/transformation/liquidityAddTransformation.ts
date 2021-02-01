@@ -52,6 +52,7 @@ export class LiquidityAddTransformation implements Transformation {
         this.outputSudtOrCkb = Sudt.from(this.sudtChangeAmount, this.request.originalUserLock)
       }
     }
+    this.processed = true
   }
 
   toCellInput(): CKBComponents.CellInput {

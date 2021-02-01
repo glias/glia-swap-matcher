@@ -30,6 +30,7 @@ export class SwapSellTransformation implements Transformation {
     if (!this.processed) {
       this.outputCkb = Ckb.from(this.capacity, this.request.originalUserLock)
     }
+    this.processed = true
   }
 
   toCellInput(): CKBComponents.CellInput {

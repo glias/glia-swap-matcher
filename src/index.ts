@@ -5,12 +5,11 @@ import { logger } from './utils/logger'
 import TaskService from './modules/services/taskService'
 import { NODE_ENV } from './utils/envs'
 
-const logTag = `\x1b[35m[Glia Swap Matcher]\x1b[0m`
 export default class GliaSwapMatcher {
   #ready = false
 
   #log = (msg: string) => {
-    logger.info(`${logTag}: ${msg}`)
+    logger.info(`${msg}`)
   }
 
   private static get taskService() {

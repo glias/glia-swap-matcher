@@ -1,4 +1,4 @@
-import { scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
+import { blake2b, PERSONAL, scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
 import type { Cell, Script } from '@ckb-lumos/base'
 import { utils } from '@ckb-lumos/base'
 
@@ -40,6 +40,10 @@ export const Uint128BigIntToLeHex = (u128: bigint): string => {
 
 export const Uint64BigIntToLeHex = (u64: bigint): string => {
   return utils.toBigUInt64LE(u64)
+}
+
+export const Uint64BigIntToHex = (u64: bigint): string => {
+  return `0x${u64.toString(16)}`
 }
 
 /*
@@ -93,4 +97,10 @@ export function numberToHex(numero: number) {
     hex = '0' + hex
   }
   return '0x' + hex
+}
+
+export function ckbBlake2b(hexStrings: Array<string>): string {
+  let blake2bIns = blake2b(32, null, null, PERSONAL, undefined)
+  hexStrings.forEach(hexString => blake2bIns.update(Buffer.from(remove0xPrefix(hexString), 'hex')))
+  return prepare0xPrefix(blake2bIns.final('hex') as string)
 }

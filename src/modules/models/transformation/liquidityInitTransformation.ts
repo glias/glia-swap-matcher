@@ -36,6 +36,7 @@ export class LiquidityInitTransformation implements Transformation {
     if (!this.processed) {
       this.outputLpt = Lpt.from(this.lptAmount, this.request.originalUserLock)
     }
+    this.processed = true
   }
 
   toCellInput(): CKBComponents.CellInput {

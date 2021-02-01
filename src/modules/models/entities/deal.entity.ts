@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm'
+import { Entity, Column, CreateDateColumn, Unique, Index, PrimaryGeneratedColumn } from 'typeorm'
 
 /*
         /------> Missing       <--\
@@ -12,31 +12,33 @@ export enum DealStatus {
 }
 
 @Entity()
+@Unique(['txHash'])
 export class Deal {
-  @Column('varchar', { name: 'id', generated: 'increment' })
+  @Index({ unique: true })
+  @PrimaryGeneratedColumn('increment', { name: 'id' })
   id!: string
 
   // this deal's tx hash
-  @PrimaryColumn('varchar', { name: 'tx_hash' })
+  @Column('varchar', { name: 'tx_hash' })
   txHash!: string
 
   // easy for backwards retrieve
   @Column('varchar', { name: 'pre_tx_hahs' })
   preTxHash!: string
 
-  // the tx, used to re-send the tx, in JSON format
+  // the tx, used to re-send the tx, in JSONbig format
   @Column('varchar', { name: 'tx' })
   tx!: string
 
-  // the info_cell this deal finishes, in JSON format
+  // the info_cell this deal finishes, in JSONbig format
   @Column('varchar', { name: 'info' })
   info!: string
 
-  // the pool_cell this deal finishes, in JSON format
+  // the pool_cell this deal finishes, in JSONbig format
   @Column('varchar', { name: 'pool' })
   pool!: string
 
-  // the matcher_change_cell this deal finishes, in JSON format
+  // the matcher_change_cell this deal finishes, in JSONbig format
   @Column('varchar', { name: 'matcherChange' })
   matcherChange!: string
 

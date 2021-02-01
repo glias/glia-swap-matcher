@@ -193,3 +193,5 @@ package-lock.json
 
 # add idea IDE
 .idea
+
+db

@@ -1,11 +1,10 @@
 import { Cell, OutPoint } from '@ckb-lumos/base'
 import {
-  changeHexEncodeEndian,
   leHexToBigIntUint128,
   remove0xPrefix,
   scriptHash,
   Uint128BigIntToLeHex,
-  Uint64BigIntToLeHex,
+  Uint64BigIntToHex,
 } from '../../../utils/tools'
 import {
   INFO_LOCK_SCRIPT,
@@ -16,7 +15,7 @@ import {
 } from '../../../utils/envs'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
-
+import JSONbig from 'json-bigint'
 /*
 define INFO_TYPE_CODE_HASH
 define INFO_LOCK_CODE_HASH
@@ -36,7 +35,8 @@ lock: - 97 bytes
     args: hash(ckb | asset_sudt_type_hash) 32 bytes | info_type_hash - 32 bytes
  */
 export class Info implements CellInputType, CellOutputType {
-  static INFO_FIXED_CAPACITY = BigInt((250 * 10) ^ 8)
+  static INFO_FIXED_CAPACITY = BigInt(250 * 10 ** 8)
+
   // this should be fixed
   capacity: bigint /*= Info.INFO_IFXED_CAPACITY*/
 
@@ -64,8 +64,9 @@ export class Info implements CellInputType, CellOutputType {
     if (BigInt(cell.cell_output.capacity) !== Info.INFO_FIXED_CAPACITY) {
       return false
     }
+
     // for liquidity_sudt_type_hash field in data
-    if (changeHexEncodeEndian(cell.data.substring(2).substring(96, 160)) !== LPT_TYPE_SCRIPT_HASH) {
+    if (cell.data.substring(2).substring(96, 160) !== remove0xPrefix(LPT_TYPE_SCRIPT_HASH)) {
       return false
     }
     if (scriptHash(cell.cell_output.type!) !== INFO_TYPE_SCRIPT_HASH) {
@@ -77,6 +78,10 @@ export class Info implements CellInputType, CellOutputType {
     }
 
     if (!cell.out_point) {
+      return false
+    }
+
+    if (cell.cell_output.lock.args.substring(2).length != 128) {
       return false
     }
 
@@ -92,7 +97,7 @@ export class Info implements CellInputType, CellOutputType {
   }
 
   static cloneWith(info: Info, txHash: string, index: string): Info {
-    info = JSON.parse(JSON.stringify(info))
+    info = JSONbig.parse(JSONbig.stringify(info))
     info.outPoint.tx_hash = txHash
     info.outPoint.index = index
     return info
@@ -104,22 +109,22 @@ export class Info implements CellInputType, CellOutputType {
         txHash: this.outPoint.tx_hash,
         index: this.outPoint.index,
       },
-      since: '0x00',
+      since: '0x0',
     }
   }
 
   toCellOutput(): CKBComponents.CellOutput {
     return {
-      capacity: Uint64BigIntToLeHex(this.capacity),
+      capacity: Uint64BigIntToHex(this.capacity),
       type: INFO_TYPE_SCRIPT,
       lock: INFO_LOCK_SCRIPT,
     }
   }
 
   toCellOutputData(): string {
-    return `0x${Uint128BigIntToLeHex(this.ckbReserve)}${Uint128BigIntToLeHex(this.sudtReserve)}${Uint128BigIntToLeHex(
-      this.sudtReserve,
-    )}${remove0xPrefix(changeHexEncodeEndian(LPT_TYPE_SCRIPT_HASH))}`
+    return `${Uint128BigIntToLeHex(this.ckbReserve)}${remove0xPrefix(
+      Uint128BigIntToLeHex(this.sudtReserve),
+    )}${remove0xPrefix(Uint128BigIntToLeHex(this.totalLiquidity))}${remove0xPrefix(LPT_TYPE_SCRIPT_HASH)}`
   }
 
   getOutPoint(): string {
