@@ -1,6 +1,6 @@
 import { blake2b, PERSONAL, scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
 import type { Cell, Script } from '@ckb-lumos/base'
-import { utils } from '@ckb-lumos/base'
+import { OutPoint, utils } from '@ckb-lumos/base'
 
 export function scriptHash(script: Script): string {
   return scriptToHash({
@@ -103,4 +103,15 @@ export function ckbBlake2b(hexStrings: Array<string>): string {
   let blake2bIns = blake2b(32, null, null, PERSONAL, undefined)
   hexStrings.forEach(hexString => blake2bIns.update(Buffer.from(remove0xPrefix(hexString), 'hex')))
   return prepare0xPrefix(blake2bIns.final('hex') as string)
+}
+
+export const defaultOutPoint: OutPoint = {
+  tx_hash: '0x',
+  index: '0x0',
+}
+
+export const defaultScript: CKBComponents.Script = {
+  args: '0x',
+  codeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+  hashType: 'data',
 }

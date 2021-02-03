@@ -1,5 +1,5 @@
 import { Cell, OutPoint } from '@ckb-lumos/base'
-import { Uint64BigIntToHex } from '../../../utils/tools'
+import { defaultOutPoint, Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
 import { BLOCK_MINER_FEE, MATCHER_LOCK_SCRIPT } from '../../../utils/envs'
@@ -21,12 +21,15 @@ export class MatcherChange implements CellInputType, CellOutputType {
 
   capacity: bigint
 
+  readonly ckbReserveOriginal: bigint
+
   outPoint: OutPoint
 
-  constructor(cell: Cell) {
-    this.capacity = BigInt(cell.cell_output.capacity)
+  constructor(capacity: bigint, outPoint: OutPoint) {
+    this.capacity = capacity
+    this.ckbReserveOriginal = capacity
 
-    this.outPoint = cell.out_point!
+    this.outPoint = outPoint
   }
 
   reduceBlockMinerFee = () => {
@@ -51,8 +54,13 @@ export class MatcherChange implements CellInputType, CellOutputType {
     if (!MatcherChange.validate(cell)) {
       return null
     }
+    let capacity = BigInt(cell.cell_output.capacity)
+    let outPoint = cell.out_point!
+    return new MatcherChange(capacity, outPoint)
+  }
 
-    return new MatcherChange(cell)
+  static default(): MatcherChange {
+    return new MatcherChange(0n, defaultOutPoint)
   }
 
   static cloneWith(matcherChange: MatcherChange, txHash: string, index: string): MatcherChange {

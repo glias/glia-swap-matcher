@@ -15,7 +15,6 @@ import { logger } from '../../utils/logger'
 
 @injectable()
 export default class MatcherService {
-
   // @ts-ignore
   #info = (msg: string) => {
     logger.info(`MatcherService: ${msg}`)
@@ -53,12 +52,17 @@ export default class MatcherService {
   buy = buy sudt
   ckb -> sudt
  */
-  processSwapBuyTransformation = (swapMatch: SwapMatch, swapBuyXform: SwapBuyTransformation): void => {
+  private processSwapBuyTransformation = (swapMatch: SwapMatch, swapBuyXform: SwapBuyTransformation): void => {
     // spend ckb to get sudt
     // ckb -> sudt
 
     // since you can not spend all ckb because we need some to hold the output sudt cell
     if (swapBuyXform.request.capacity - swapBuyXform.request.tips <= SwapBuyTransformation.SUDT_FIXED_CAPACITY) {
+      this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash)
+      this.#info(
+        `swapBuyXform.request.capacity ${swapBuyXform.request.capacity} - swapBuyXform.request.tips ${swapBuyXform.request.tips} <= SwapBuyTransformation.SUDT_FIXED_CAPACITY ${SwapBuyTransformation.SUDT_FIXED_CAPACITY}`,
+      )
+
       swapBuyXform.skip = true
       return
     }
@@ -76,6 +80,9 @@ export default class MatcherService {
     let sudtGot = (ckbIn * 997n * swapMatch.info.sudtReserve) / (swapMatch.info.ckbReserve * 1000n + ckbIn * 997n) + 1n
 
     if (sudtGot < swapBuyXform.request.amountOutMin) {
+      this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash)
+      this.#info(`sudtGot ${sudtGot}< swapBuyXform.request.amountOutMin ${swapBuyXform.request.amountOutMin}`)
+
       swapBuyXform.skip = true
       return
     }
@@ -104,7 +111,7 @@ export default class MatcherService {
   sell = sell sudt
   sudt -> ckb
   */
-  processSwapSellTransformation = (swapMatch: SwapMatch, swapSellXform: SwapSellTransformation): void => {
+  private processSwapSellTransformation = (swapMatch: SwapMatch, swapSellXform: SwapSellTransformation): void => {
     // spend sudt to get ckb
     // sudt -> ckb
 
@@ -121,6 +128,9 @@ export default class MatcherService {
       1n
 
     if (ckbOut < swapSellXform.request.amountOutMin) {
+      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash)
+      this.#info(`ckbOut ${ckbOut} < swapSellXform.request.amountOutMin ${swapSellXform.request.amountOutMin}`)
+
       swapSellXform.skip = true
       return
     }
@@ -129,6 +139,11 @@ export default class MatcherService {
       ckbOut + swapSellXform.request.capacity <
       SwapSellTransformation.CKB_FIXED_MIN_CAPACITY + swapSellXform.request.tips
     ) {
+      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash)
+      this.#info(
+        `ckbOut ${ckbOut} + swapSellXform.request.capacity ${swapSellXform.request.capacity}< SwapSellTransformation.CKB_FIXED_MIN_CAPACITY ${SwapSellTransformation.CKB_FIXED_MIN_CAPACITY} + swapSellXform.request.tips ${swapSellXform.request.tips}`,
+      )
+
       swapSellXform.skip = true
       return
     }
@@ -138,7 +153,7 @@ export default class MatcherService {
       swapSellXform.request.capacity -
       //SwapSellTransformation.CKB_FIXED_MIN_CAPACITY -
       swapSellXform.request.tips
-
+    // todo check capacity min
     swapMatch.matcherChange.capacity += swapSellXform.request.tips
 
     // then all remaining sudtChangeAmount, include of 0.3% as liquidity provider interest, goes into pool
@@ -179,7 +194,7 @@ export default class MatcherService {
 
   LiquidityRemoveReq -> Sudt + Ckb
  */
-  processLiquidityRemoveTransformation = (
+  private processLiquidityRemoveTransformation = (
     liquidityMatch: LiquidityMatch,
     liquidityRemoveXform: LiquidityRemoveTransformation,
   ): void => {
@@ -191,6 +206,11 @@ export default class MatcherService {
       1n
 
     if (withdrawnSudt < liquidityRemoveXform.request.sudtMin || withdrawnCkb < liquidityRemoveXform.request.ckbMin) {
+      this.#info('process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash)
+      this.#info(
+        `withdrawnSudt ${withdrawnSudt}< liquidityRemoveXform.request.sudtMin ${liquidityRemoveXform.request.sudtMin} || withdrawnCkb ${withdrawnCkb}< liquidityRemoveXform.request.ckbMin ${liquidityRemoveXform.request.ckbMin}`,
+      )
+
       liquidityRemoveXform.skip = true
       return
     }
@@ -199,6 +219,11 @@ export default class MatcherService {
       liquidityRemoveXform.request.capacityAmount + withdrawnCkb <
       LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY + liquidityRemoveXform.request.tips
     ) {
+      this.#info('process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash)
+      this.#info(
+        `liquidityRemoveXform.request.capacityAmount ${liquidityRemoveXform.request.capacityAmount} + withdrawnCkb ${withdrawnCkb} < LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY ${LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY} + liquidityRemoveXform.request.tips ${liquidityRemoveXform.request.tips}`,
+      )
+
       liquidityRemoveXform.skip = true
       return
     }
@@ -230,7 +255,7 @@ export default class MatcherService {
     return lpt?       add ckb
    LiquidityAddReq -> Lpt(size is fixed if script is determined) + change(size is fixed if script is determined)
   */
-  processLiquidityAddTransformation = (
+  private processLiquidityAddTransformation = (
     liquidityMatch: LiquidityMatch,
     liquidityAddXform: LiquidityAddTransformation,
   ): void => {
@@ -242,6 +267,9 @@ export default class MatcherService {
       Sudt.SUDT_FIXED_CAPACITY
 
     if (ckbAvailable <= 0n) {
+      this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
+      this.#info(`ckbAvailable ${ckbAvailable} <= 0n}`)
+
       liquidityAddXform.skip = true
       return
     }
@@ -249,6 +277,16 @@ export default class MatcherService {
     let sudtNeeded = (ckbAvailable * liquidityMatch.info.sudtReserve) / liquidityMatch.info.ckbReserve + 1n
 
     if (sudtNeeded < liquidityAddXform.request.sudtAmount) {
+      if (sudtNeeded < liquidityAddXform.request.sudtMin || ckbAvailable < liquidityAddXform.request.ckbMin) {
+        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
+        this.#info(
+          `sudtNeeded ${sudtNeeded} < liquidityAddXform.request.sudtMin ${liquidityAddXform.request.sudtMin}|| ckbAvailable ${ckbAvailable}< liquidityAddXform.request.ckbMin ${liquidityAddXform.request.ckbMin}`,
+        )
+
+        liquidityAddXform.skip = true
+        return
+      }
+
       // OK, we use all ckb we can use and sudt remains
       let lptGot = (liquidityMatch.info.totalLiquidity * ckbAvailable) / liquidityMatch.info.ckbReserve + 1n
 
@@ -273,9 +311,26 @@ export default class MatcherService {
       let ckbNeeded =
         (liquidityAddXform.request.sudtAmount * liquidityMatch.info.ckbReserve) / liquidityMatch.info.sudtReserve + 1n
 
+      if (
+        liquidityAddXform.request.sudtAmount < liquidityAddXform.request.sudtMin ||
+        ckbNeeded < liquidityAddXform.request.ckbMin
+      ) {
+        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
+        this.#info(
+          `liquidityAddXform.request.sudtAmount ${liquidityAddXform.request.sudtAmount} < liquidityAddXform.request.sudtMin ${liquidityAddXform.request.sudtMin}|| ckbNeeded ${ckbNeeded}< liquidityAddXform.request.ckbMin ${liquidityAddXform.request.ckbMin}`,
+        )
+
+        liquidityAddXform.skip = true
+        return
+      }
+
       const ckbLeft = liquidityAddXform.request.capacityAmount - liquidityAddXform.request.tips - ckbNeeded
       if (ckbLeft < Ckb.CKB_FIXED_MIN_CAPACITY + Lpt.LPT_FIXED_CAPACITY) {
         // this shouldn't happens
+        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
+        this.#info(`ckbLeft ${ckbLeft}< Ckb.CKB_FIXED_MIN_CAPACITY + Lpt.LPT_FIXED_CAPACITY`)
+
+        liquidityAddXform.skip = true
         return
       }
 

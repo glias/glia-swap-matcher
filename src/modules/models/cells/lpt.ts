@@ -1,4 +1,4 @@
-import { Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
+import { defaultScript, Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { LPT_TYPE_SCRIPT } from '../../../utils/envs'
 
@@ -29,6 +29,10 @@ export class Lpt implements CellOutputType {
 
   static from(lptAmount: bigint, originalUserLock: CKBComponents.Script): Lpt {
     return new Lpt(lptAmount, originalUserLock)
+  }
+
+  static default(): Lpt {
+    return new Lpt(0n, defaultScript)
   }
 
   toCellOutput(): CKBComponents.CellOutput {

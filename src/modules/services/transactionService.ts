@@ -70,12 +70,14 @@ export default class TransactionService {
 
     // compose tx
     const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
+    this.#info('liquidity composed tx: ' + JSONbig.stringify(signedTx, null, 2))
+    this.#info('liquidity composed txHash: ' + txHash)
 
     liquidityMatch.composedTx = signedTx
     liquidityMatch.composedTxHash = txHash
 
-    this.#info('liquidityMatch res: ' + JSONbig.stringify(liquidityMatch, null, 2))
-    this.#info('liquidityMatch res: ' + txHash)
+    //this.#info('liquidityMatch res: ' + JSONbig.stringify(liquidityMatch, null, 2))
+    //this.#info('liquidityMatch res: ' + txHash)
 
     return [
       Info.cloneWith(liquidityMatch.info, txHash, '0x00'),
@@ -132,12 +134,14 @@ export default class TransactionService {
     }
 
     const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
+    this.#info('swap composed tx: ' + JSONbig.stringify(signedTx, null, 2))
+    this.#info('swap composed txHash: ' + txHash)
 
     swapMatch.composedTx = signedTx
     swapMatch.composedTxHash = txHash
 
-    this.#info('swapMatch res: ' + JSONbig.stringify(swapMatch, null, 2))
-    this.#info('swapMatch res: ' + txHash)
+    //this.#info('swapMatch res: ' + JSONbig.stringify(swapMatch, null, 2))
+    //this.#info('swapMatch res: ' + txHash)
   }
 
   composeLiquidityInitTransaction = (liquidityMatch: LiquidityMatch): void => {
@@ -162,16 +166,17 @@ export default class TransactionService {
     outputsData = outputsData.concat(liquidityMatch.initXforms!.toCellOutputData())
 
     const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData)
-    this.#info('composed tx: ' + JSONbig.stringify(signedTx, null, 2))
+    this.#info('init composed tx: ' + JSONbig.stringify(signedTx, null, 2))
+    this.#info('init composed txHash: ' + txHash)
 
     liquidityMatch.composedTx = signedTx
     liquidityMatch.composedTxHash = txHash
 
-    this.#info('liquidityInitMatch res: ' + JSONbig.stringify(liquidityMatch, null, 2))
-    this.#info('liquidityInitMatch res: ' + txHash)
+    //this.#info('liquidityInitMatch res: ' + JSONbig.stringify(liquidityMatch, null, 2))
+    //this.#info('liquidityInitMatch res: ' + txHash)
   }
 
-  composeTxAndSign = (
+  private composeTxAndSign = (
     inputs: Array<CKBComponents.CellInput>,
     outputs: Array<CKBComponents.CellOutput>,
     outputsData: Array<string>,
@@ -189,12 +194,15 @@ export default class TransactionService {
     return this.signTransaction(rawTx)
   }
 
-  signTransaction = (rawTransaction: CKBComponents.RawTransactionToSign): [CKBComponents.RawTransaction, string] => {
+  public signTransaction = (
+    rawTransaction: CKBComponents.RawTransactionToSign,
+  ): [CKBComponents.RawTransaction, string] => {
     const txHash = this.#ckb.utils.rawTransactionToHash(rawTransaction)
-    const witness = this.#ckb.signWitnesses(MATCHER_PRIVATE_KEY)({
-      transactionHash: txHash,
-      witnesses: [{ lock: '', inputType: '', outputType: '' }],
-    })[0]
+    // const witness = this.#ckb.signWitnesses(MATCHER_PRIVATE_KEY)({
+    //   transactionHash: txHash,
+    //   witnesses: [{ lock: '', inputType: '', outputType: '' }],
+    // })[0]
+    const witness = this.signWitness(txHash)
 
     const signedTx: any = {
       ...rawTransaction,
@@ -202,5 +210,12 @@ export default class TransactionService {
       witnesses: [...rawTransaction.witnesses.slice(0, 2), witness, ...rawTransaction.witnesses.slice(3)],
     }
     return [signedTx, txHash]
+  }
+
+  public signWitness = (txHash: string): StructuredWitness => {
+    return this.#ckb.signWitnesses(MATCHER_PRIVATE_KEY)({
+      transactionHash: txHash,
+      witnesses: [{ lock: '', inputType: '', outputType: '' }],
+    })[0]
   }
 }

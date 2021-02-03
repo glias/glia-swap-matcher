@@ -7,7 +7,7 @@
     "node": ">=12 <13"
   },
   "scripts": {
-    "start:dev": "cross-env NODE_ENV=development ts-node src/index",
+    "start:dev": "cross-env NODE_ENV=development DOTENV_CONFIG_PATH=./config/Glia-Ckb.env  ts-node src/index",
     "start:prod": "cross-env NODE_ENV=production ts-node src/index",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -16,8 +16,7 @@
     "build:prod": "cross-env NODE_ENV=production yarn run tsc",
     "clean": "npx rimraf lib && npx rimraf tsconfig.tsbuildinfo && npx rimraf src/migrations",
     "format": "prettier -w --ignore-unknown src/**/*",
-    "db:init:dev": "npm run build:dev && typeorm migration:generate -c development -d src/migrations -n InitDb && npm run build:dev && typeorm -c development migration:run",
-    "db:init:prod": "npm run build:prod && typeorm migration:generate -c production -d src/migrations -n InitDb && npm run build:prod && typeorm -c production migration:run"
+    "db:init:prod": "yarn run build:prod && typeorm migration:generate -c production -d src/migrations -n InitDb && yarn run build:prod && typeorm -c production migration:run"
   },
   "husky": {
     "hooks": {

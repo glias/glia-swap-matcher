@@ -20,7 +20,7 @@ development:
     - src/**/*.entity.ts
   logging: true
   logger: advanced-console
-  synchronize: false
+  synchronize: true
 
 test:
   type: sqlite

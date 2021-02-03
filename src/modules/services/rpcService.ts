@@ -22,9 +22,9 @@ export default class RpcService {
     this.#client = new Rpc(CKB_NODE_URL)
   }
 
-  getTip = async (): Promise<string> => {
-    return await this.#client.getTipBlockNumber()
-  }
+  // getTip = async (): Promise<string> => {
+  //   return await this.#client.getTipBlockNumber()
+  // }
 
   getTxsStatus = async (txHashes: Array<string>): Promise<Array<[string, Omit<DealStatus, DealStatus.Sent>]>> => {
     const requests: Array<['getTransaction', string]> = txHashes.map(hash => ['getTransaction', hash])
@@ -33,14 +33,15 @@ export default class RpcService {
 
     this.#info(`rpc batch getTransaction result: ${JSONbig.stringify(results)}`)
 
-    const ret : Array<[string, Omit<DealStatus, DealStatus.Sent>]>= txHashes.map((hash,index) =>{
+    const ret: Array<[string, Omit<DealStatus, DealStatus.Sent>]> = txHashes.map((hash, index) => {
       const result = results[index]
-      if(results[index] !=null ){
-        if(hash !== result.transaction.hash){
-          this.#error('that\'s impossible')
+      if (results[index] != null) {
+        if (hash !== result.transaction.hash) {
+          this.#error("that's impossible")
         }
-        const txRes :Omit<DealStatus, DealStatus.Sent>= result.txStatus.status === 'committed'? DealStatus.Committed: DealStatus.CutOff
-        return [hash,txRes]
+        const txRes: Omit<DealStatus, DealStatus.Sent> =
+          result.txStatus.status === 'committed' ? DealStatus.Committed : DealStatus.CutOff
+        return [hash, txRes]
       }
       return [hash, DealStatus.CutOff]
     })
@@ -48,9 +49,9 @@ export default class RpcService {
     return ret
   }
 
-  getTx = async (txHash: string): Promise<CKBComponents.TransactionWithStatus> => {
-    return await this.#client.getTransaction(txHash)
-  }
+  // getTx = async (txHash: string): Promise<CKBComponents.TransactionWithStatus> => {
+  //   return await this.#client.getTransaction(txHash)
+  // }
 
   // give an outpoint of certain cell, find a lockscript fromCell the tx inside the
   // the outpoint which matches target hash
@@ -68,7 +69,7 @@ export default class RpcService {
 
   sendTransaction = async (rawTx: CKBComponents.RawTransaction): Promise<void> => {
     try {
-      this.#info(JSONbig.stringify(rawTx, null, 2))
+      //this.#info('sendTransaction : ' + JSONbig.stringify(rawTx, null, 2))
       await this.#client.sendTransaction(rawTx)
     } catch (e) {
       this.#error('sendTransaction error: ' + e)

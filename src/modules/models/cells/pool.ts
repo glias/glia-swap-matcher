@@ -1,5 +1,5 @@
 import { Cell, OutPoint } from '@ckb-lumos/base'
-import { leHexToBigIntUint128, Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
+import { defaultOutPoint, leHexToBigIntUint128, Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
 import { POOL_LOCK_SCRIPT, POOL_TYPE_SCRIPT } from '../../../utils/envs'
@@ -22,13 +22,19 @@ export class Pool implements CellInputType, CellOutputType {
   capacity: bigint
   sudtAmount: bigint
 
+  readonly capacityOriginal: bigint
+  readonly sudtReserveOriginal: bigint
+
   outPoint: OutPoint
 
-  constructor(cell: Cell) {
-    this.sudtAmount = leHexToBigIntUint128(cell.data)
-    this.capacity = BigInt(cell.cell_output.capacity)
+  constructor(capacity: bigint, sudtAmount: bigint, outPoint: OutPoint) {
+    this.capacity = capacity
+    this.sudtAmount = sudtAmount
 
-    this.outPoint = cell.out_point!
+    this.capacityOriginal = capacity
+    this.sudtReserveOriginal = sudtAmount
+
+    this.outPoint = outPoint
   }
 
   static validate(cell: Cell): boolean {
@@ -43,8 +49,16 @@ export class Pool implements CellInputType, CellOutputType {
     if (!Pool.validate(cell)) {
       return null
     }
+    let capacity = BigInt(cell.cell_output.capacity)
+    let sudtAmount = leHexToBigIntUint128(cell.data)
 
-    return new Pool(cell)
+    let outPoint = cell.out_point!
+
+    return new Pool(capacity, sudtAmount, outPoint)
+  }
+
+  static default(): Pool {
+    return new Pool(0n, 0n, defaultOutPoint)
   }
 
   static cloneWith(pool: Pool, txHash: string, index: string): Pool {

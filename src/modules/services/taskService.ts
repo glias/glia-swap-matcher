@@ -39,7 +39,6 @@ export default class TaskService {
     logger.error(`TaskService: ${msg}`)
   }
 
-
   constructor(
     @inject(new LazyServiceIdentifer(() => modules[ScanService.name])) scanService: ScanService,
     @inject(new LazyServiceIdentifer(() => modules[DealService.name])) dealService: DealService,
@@ -53,9 +52,6 @@ export default class TaskService {
     this.#matcherService = matcherService
     this.#transactionService = transactionService
   }
-
-  //每个5秒钟扫描所有的pending tx和读取req cells
-  //如果订阅的changed事件收到,则提前读取req cells
 
   start = async () => {
     new CronJob(this.#schedule, this.wrapperedTask, null, true)
@@ -74,7 +70,7 @@ export default class TaskService {
     }
   }
 
-  // 定时启动
+  // registered into cron job
   readonly task = async () => {
     this.#info('task job: ' + new Date())
     // step 1, get latest info cell and scan all reqs
@@ -100,10 +96,10 @@ export default class TaskService {
     // and force re-send again :)
 
     let scanRes = await this.#scanService.scanAll()
-    if (!scanRes) {
-      return
-    }
-    let [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = scanRes
+    // console.log('scanRes: '+JSONbig.stringify(scanRes))
+    let addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange
+
+    ;[addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = scanRes
 
     // use the info's outpoint to search our db
     // the result may be null, may present with Committed, or may present with Sent
@@ -113,16 +109,16 @@ export default class TaskService {
       // the info is not in our deal, some one cuts off our deals, or maybe we are new to the pair
 
       // get all deal txs we sent
-      let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
-
-      if (sentDeals.length) {
-        let sent_deals_txHashes = sentDeals.map(deal => deal.txHash)
-        // get all status of our sent deal txs and update them
-        // some maybe set to committed
-        // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
-        let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
-        await this.#dealService.updateDealsStatus(sentDealsStatus)
-      }
+      // let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
+      //
+      // if (sentDeals.length) {
+      //   let sent_deals_txHashes = sentDeals.map(deal => deal.txHash)
+      //   // get all status of our sent deal txs and update them
+      //   // some maybe set to committed
+      //   // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
+      //   let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
+      //   await this.#dealService.updateDealsStatus(sentDealsStatus)
+      // }
 
       // based on the current situation, do a new matching job
 
@@ -256,6 +252,7 @@ export default class TaskService {
       await this.#dealService.saveDeal(deal)
     }
   }
+
   handlerInit = async (
     addXforms: Array<LiquidityAddTransformation>,
     info: Info,
