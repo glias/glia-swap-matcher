@@ -2,9 +2,9 @@ import 'dotenv/config'
 import { blake160, privateKeyToPublicKey, scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
 import { HashType, QueryOptions } from '@ckb-lumos/base'
 import { ckbBlake2b, prepare0xPrefix, remove0xPrefix, scriptCamelToSnake } from './tools'
-import {logger} from "./logger"
+import { logger } from './logger'
 
-function log (msg: string) {
+function log(msg: string) {
   logger.info(`${msg}`)
 }
 
@@ -103,7 +103,7 @@ log('INFO_LOCK_SCRIPT_HASH: ' + INFO_LOCK_SCRIPT_HASH)
 
 export const INFO_QUERY_OPTION: QueryOptions = {
   type: {
-    argsLen: 'any',
+    argsLen: 32,
     script: scriptCamelToSnake(INFO_TYPE_SCRIPT),
   },
   lock: {
@@ -181,11 +181,15 @@ export const LIQUIDITY_REQ_LOCK_SCRIPT_TX_HASH = process.env.LIQUIDITY_REQ_LOCK_
 export const LIQUIDITY_REQ_LOCK_SCRIPT_INDEX = process.env.LIQUIDITY_REQ_LOCK_SCRIPT_INDEX!
 export const LIQUIDITY_REQ_LOCK_CODE_HASH = process.env.LIQUIDITY_REQ_LOCK_CODE_HASH!
 export const LIQUIDITY_REQ_LOCK_HASH_TYPE: HashType = process.env.SUDT_CODE_HASH === 'type' ? 'type' : 'data'
+export const LIQUIDITY_REQ_LOCK_ARGS_VERSION = process.env.LIQUIDITY_REQ_LOCK_ARGS_VERSION!
+export const LIQUIDITY_REQ_LOCK_ARGS = INFO_TYPE_SCRIPT_HASH + remove0xPrefix(LIQUIDITY_REQ_LOCK_ARGS_VERSION)
+
+log('LIQUIDITY_REQ_LOCK_ARGS: ' + LIQUIDITY_REQ_LOCK_ARGS)
 
 export const LIQUIDITY_REQ_LOCK_SCRIPT: CKBComponents.Script = {
   codeHash: LIQUIDITY_REQ_LOCK_CODE_HASH,
   hashType: LIQUIDITY_REQ_LOCK_HASH_TYPE,
-  args: '0x',
+  args: LIQUIDITY_REQ_LOCK_ARGS,
 }
 
 // add req
@@ -199,11 +203,11 @@ data: - 16 bytes
 type: asset_sudt_type for add - 65 bytes
 lock: - 146 bytes
     code: LIQUIDITY_REQ_LOCK_CODE_HASH - 32 bytes + 1 byte
-    args: user_lock_hash (32 bytes, 0..32)
+    args: info_type_hash_32 (32 bytes, 0..32)
     | version (u8, 1 byte, 32..33)
     | sudtMin (u128, 16 bytes, 33..49)
     | ckbMin (u64, 8 bytes, 49..57)
-    | info_type_hash_32 (32 bytes, 57..89)
+    | user_lock_hash (32 bytes, 57..89)
     | tips (8 bytes, 89..97)
     | tips_sudt (16 bytes, 97..113)
  */
@@ -233,11 +237,11 @@ data: - 16 bytes
 type: liquidity_sudt_type for remove - 65 bytes
 lock: - 146 bytes
     code: LIQUIDITY_REQ_LOCK_CODE_HASH - 32 bytes + 1 byte
-    args: user_lock_hash (32 bytes, 0..32)
+    args: info_type_hash_32 (32 bytes, 0..32)
     | version (u8, 1 byte, 32..33)
     | sudtMin (u128, 16 bytes, 33..49)
     | ckbMin (u64, 8 bytes, 49..57)
-    | info_type_hash_32 (32 bytes, 57..89)
+    | user_lock_hash (32 bytes, 57..89)
     | tips (8 bytes, 89..97)
     | tips_sudt (16 bytes, 97..113)
  */
@@ -264,10 +268,12 @@ export const SWAP_REQ_LOCK_SCRIPT_INDEX = process.env.SWAP_REQ_LOCK_SCRIPT_INDEX
 export const SWAP_REQ_LOCK_CODE_HASH = process.env.SWAP_REQ_LOCK_CODE_HASH!
 export const SWAP_REQ_LOCK_HASH_TYPE: HashType = process.env.SWAP_REQ_LOCK_HASH_TYPE === 'type' ? 'type' : 'data'
 
+export const SWAP_REQ_LOCK_ARGS_VERSION = process.env.SWAP_REQ_LOCK_ARGS_VERSION!
+
 export const SWAP_REQ_LOCK_SCRIPT: CKBComponents.Script = {
   codeHash: SWAP_REQ_LOCK_CODE_HASH,
   hashType: SWAP_REQ_LOCK_HASH_TYPE,
-  args: '0x', //138bytes
+  args: 'TBD', //138bytes
 }
 
 // buy
@@ -286,21 +292,26 @@ data: -  null for buy
 type: null for buy - 0 bytes
 lock: - 138 bytes
     code: SWAP_REQ_LOCK_CODE_HASH - 32 bytes + 1 byte
-    args: user_lock_hash (32 bytes, 0..32)
+    args: sudt_type_hash (32 bytes, 0..32)
     | version (u8, 1 byte, 32..33)
     | amountOutMin (u128, 16 bytes, 33..49)
-    | sudt_type_hash (32 bytes, 49..81)
+    | user_lock_hash (32 bytes, 49..81)
     | tips (8 bytes, 81..89)
     | tips_sudt (16 bytes, 89..105)
  */
 export const SWAP_BUY_REQ_TYPE_SCRIPT = null
 export const SWAP_BUY_REQ_TYPE_SCRIPT_HASH = null
+export const SWAP_BUY_REQ_LOCK_ARG = SUDT_TYPE_SCRIPT_HASH + remove0xPrefix(SWAP_REQ_LOCK_ARGS_VERSION)
+log('SWAP_BUY_REQ_LOCK_ARG: ' + SWAP_BUY_REQ_LOCK_ARG)
+
+export const SWAP_BUY_REQ_LOCK_SCRIPT = SWAP_REQ_LOCK_SCRIPT
+SWAP_BUY_REQ_LOCK_SCRIPT.args = SWAP_BUY_REQ_LOCK_ARG
 
 export const SWAP_BUY_REQ_QUERY_OPTION: QueryOptions = {
   type: 'empty',
   lock: {
     argsLen: 105,
-    script: scriptCamelToSnake(SWAP_REQ_LOCK_SCRIPT),
+    script: scriptCamelToSnake(SWAP_BUY_REQ_LOCK_SCRIPT),
   },
   fromBlock: SWAP_FROM_BLOCK,
 }
@@ -322,15 +333,22 @@ data: - 16 bytes for sell
 type: sudt_type for sell - 65 bytes
 lock: - 138 bytes
     code: SWAP_REQ_LOCK_CODE_HASH - 32 bytes + 1 byte
-    args: user_lock_hash (32 bytes, 0..32)
+    args: sudt_type_hash (32 bytes, 0..32)
     | version (u8, 1 byte, 32..33)
     | amountOutMin (u128, 16 bytes, 33..49)
-    | sudt_type_hash (32 bytes, 49..81)
+    | user_lock_hash (32 bytes, 49..81)
     | tips (8 bytes, 81..89)
     | tips_sudt (16 bytes, 89..105)
  */
 export const SWAP_SELL_REQ_TYPE_SCRIPT = SUDT_TYPE_SCRIPT
 export const SWAP_SELL_REQ_TYPE_SCRIPT_HASH = SUDT_TYPE_SCRIPT_HASH
+
+export const SWAP_SELL_REQ_LOCK_ARG =
+  '0x0000000000000000000000000000000000000000000000000000000000000000' + remove0xPrefix(SWAP_REQ_LOCK_ARGS_VERSION)
+log('SWAP_SELL_REQ_LOCK_ARG: ' + SWAP_SELL_REQ_LOCK_ARG)
+
+export const SWAP_SELL_REQ_LOCK_SCRIPT = SWAP_REQ_LOCK_SCRIPT
+SWAP_SELL_REQ_LOCK_SCRIPT.args = SWAP_SELL_REQ_LOCK_ARG
 
 export const SWAP_SELL_REQ_QUERY_OPTION: QueryOptions = {
   type: {
@@ -339,7 +357,7 @@ export const SWAP_SELL_REQ_QUERY_OPTION: QueryOptions = {
   },
   lock: {
     argsLen: 105,
-    script: scriptCamelToSnake(SWAP_REQ_LOCK_SCRIPT),
+    script: scriptCamelToSnake(SWAP_SELL_REQ_LOCK_SCRIPT),
   },
   fromBlock: SWAP_FROM_BLOCK,
 }
@@ -349,6 +367,10 @@ export const SECP256K1_TX_HASH = '0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c
 export const SECP256K1_TX_INDEX = '0x0'
 export const SECP256K1_CODE_HASH = '0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8'
 export const SECP256K1_HASH_TYPE = 'type'
+
+// matcher change, ckb
+export const PW_LOCK_CODE_HASH = process.env.PW_LOCK_CODE_HASH!
+export const PW_LOCK_HASH_TYPE: HashType = process.env.PW_LOCK_HASH_TYPE === 'type' ? 'type' : 'data'
 
 // matcher change, ckb
 export const MATCHER_PRIVATE_KEY = process.env.MATCHER_PRIVATE_KEY!

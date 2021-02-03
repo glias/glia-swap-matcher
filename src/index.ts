@@ -1,9 +1,10 @@
+import { NODE_ENV } from './utils/envs'
+
 import 'reflect-metadata'
 import boostrap from './bootstrap'
 import { container, modules } from './container'
 import { logger } from './utils/logger'
 import TaskService from './modules/services/taskService'
-import { NODE_ENV } from './utils/envs'
 
 export default class GliaSwapMatcher {
   #ready = false

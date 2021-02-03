@@ -3,6 +3,7 @@ import { getConnection, In } from 'typeorm'
 import DealRepository from '../repositories/deal.repository'
 import { Deal, DealStatus } from '../models/entities/deal.entity'
 import { NODE_ENV } from '../../utils/envs'
+import { logger } from '../../utils/logger'
 
 @injectable()
 export default class DealService {
@@ -12,8 +13,21 @@ export default class DealService {
     this.#dealRepository = getConnection(NODE_ENV).getCustomRepository(DealRepository)
   }
 
+  #error = (msg: string) => {
+    logger.error(`DealService: ${msg}`)
+  }
+
+  clearDb = async (): Promise<void> =>{
+    if(NODE_ENV !== 'test'){
+      this.#error('clearDb is forbidden for not test environment')
+      return
+    }
+    await this.#dealRepository.clear()
+  }
+
   getAllSentDeals = async (): Promise<Array<Deal>> => {
-    return await this.#dealRepository.getAllSentDeals()
+    const ret =  await this.#dealRepository.getAllSentDeals()
+    return ret
   }
 
   getByPreTxHash = async (preTxHash: string): Promise<Deal | null> => {
@@ -24,7 +38,7 @@ export default class DealService {
     return await this.#dealRepository.getByTxHahs(txHash)
   }
 
-  saveDeal = async (deal: Omit<Deal, 'createdAt' | 'id'>): Promise<Deal> => {
+  saveDeal = async (deal: Omit<Deal, 'createdAt' | 'id'>): Promise<void> => {
     return await this.#dealRepository.saveDeal(deal)
   }
 
@@ -43,7 +57,7 @@ export default class DealService {
   updateDealsStatus = async (input: Array<[string, Omit<DealStatus, DealStatus.Sent>]>) => {
     let committed_deals: Array<string> = input
       .filter(([_txHash, status]) => {
-        status === DealStatus.Committed
+        return status === DealStatus.Committed
       })
       .map(([txHash, _status]) => {
         return txHash
@@ -63,7 +77,7 @@ export default class DealService {
 
     let cut_off_deals: Array<string> = input
       .filter(([_txHash, status]) => {
-        status === DealStatus.CutOff
+        return status === DealStatus.CutOff
       })
       .map(([txHash, _status]) => {
         return txHash
@@ -87,7 +101,7 @@ export default class DealService {
     let pointer: Deal = deal
     while (pointer.status == DealStatus.Sent) {
       pointer.status = DealStatus.Committed
-      pointer = await this.#dealRepository.saveDeal(pointer)
+      await this.#dealRepository.saveDeal(pointer)
 
       // get the pre tx and recursive check if it need to be set Committed
       pointer = (await this.getByPreTxHash(pointer.preTxHash))!

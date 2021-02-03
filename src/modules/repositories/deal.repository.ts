@@ -1,13 +1,22 @@
 import { injectable } from 'inversify'
 import { EntityRepository, Repository } from 'typeorm'
 import { Deal, DealStatus } from '../models/entities/deal.entity'
+import { logger } from '../../utils/logger'
 
 @injectable()
 @EntityRepository(Deal)
 class DealRepository extends Repository<Deal> {
-  saveDeal = async (deal: Omit<Deal, 'id' | 'createdAt'>): Promise<Deal> => {
+  // @ts-ignore
+  #error = (msg: string) => {
+    logger.error(`DealRepository: ${msg}`)
+  }
+
+  saveDeal = async (deal: Omit<Deal, 'id' | 'createdAt'>): Promise<void> => {
     const dealTosave: Deal = this.create(deal)
-    return this.save(dealTosave)
+
+    await this.save(dealTosave)
+
+    return
   }
 
   updateDealStatus = async (txHash: string, status: DealStatus) => {
@@ -15,13 +24,16 @@ class DealRepository extends Repository<Deal> {
   }
 
   getByTxHahs = async (txHash: string): Promise<Deal | null> => {
-    return (
-      (await this.findOne({
-        where: {
-          txHash: txHash,
-        },
-      })) || null
-    )
+    const ret = await this.findOne({
+      where: {
+        txHash: txHash,
+      },
+    })
+
+    if (ret === undefined) {
+      return null
+    }
+    return ret
   }
 
   getByPreTxHahs = async (preTxHash: string): Promise<Deal | null> => {
@@ -35,14 +47,18 @@ class DealRepository extends Repository<Deal> {
   }
 
   getAllSentDeals = async (): Promise<Array<Deal>> => {
-    return await this.find({
-      where: {
-        status: DealStatus.Sent,
-      },
-      order: {
-        id: 'ASC',
-      },
-    })
+
+
+      const ret = await this.find({
+        where: {
+          status: DealStatus.Sent,
+        },
+        order: {
+          id: 'ASC',
+        },
+      })
+
+    return ret
   }
 }
 

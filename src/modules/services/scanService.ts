@@ -30,8 +30,9 @@ import { SwapBuyTransformation } from '../models/transformation/swapBuyTransform
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { SwapSellReq } from '../models/cells/swapSellReq'
 import { bigIntToHex } from '../../utils/tools'
-import JSONbig from 'json-bigint'
 import { logger } from '../../utils/logger'
+// @ts-ignore
+import JSONbig from 'json-bigint'
 
 @injectable()
 export default class ScanService {
@@ -39,6 +40,7 @@ export default class ScanService {
   readonly #rpcService: RpcService
   readonly #knex: knex
 
+  // @ts-ignore
   #info = (msg: string) => {
     logger.info(`ScanService: ${msg}`)
   }
@@ -47,11 +49,10 @@ export default class ScanService {
     logger.error(`ScanService: ${msg}`)
   }
 
-
   constructor(@inject(new LazyServiceIdentifer(() => modules[RpcService.name])) rpcService: RpcService) {
     this.#rpcService = rpcService
 
-    this.#knex =  knex({
+    this.#knex = knex({
       client: 'mysql',
       connection: {
         host: INDEXER_MYSQL_URL,
@@ -60,26 +61,25 @@ export default class ScanService {
         password: INDEXER_MYSQL_PASSWORD,
         database: INDEXER_MYSQL_DATABASE,
       },
-    });
+    })
 
     this.#indexer = new Indexer(INDEXER_URL, this.#knex)
   }
 
-  getTip = async (): Promise<bigint> => {
+  public getTip = async (): Promise<bigint> => {
     return BigInt((await this.#indexer.tip()).block_number)
   }
 
-  scanAll = async (): Promise<
-    | [
-        Array<LiquidityAddTransformation>,
-        Array<LiquidityRemoveTransformation>,
-        Array<SwapBuyTransformation>,
-        Array<SwapSellTransformation>,
-        Info,
-        Pool,
-        MatcherChange,
-      ]
-    | null
+  public scanAll = async (): Promise<
+    [
+      Array<LiquidityAddTransformation>,
+      Array<LiquidityRemoveTransformation>,
+      Array<SwapBuyTransformation>,
+      Array<SwapSellTransformation>,
+      Info,
+      Pool,
+      MatcherChange,
+    ]
   > => {
     const tip = bigIntToHex(await this.getTip())
 
@@ -104,7 +104,7 @@ export default class ScanService {
   }
 
   // be careful that the tip is hexicalDecimal
-  scanReqs = async (
+  private scanReqs = async (
     tip?: string,
   ): Promise<[Array<LiquidityAddReq>, Array<LiquidityRemoveReq>, Array<SwapBuyReq>, Array<SwapSellReq>]> => {
     const swapBuyReqCollector = new CellCollector(this.#knex, {
@@ -117,9 +117,14 @@ export default class ScanService {
 
       const script = await this.#rpcService.getLockScript(cell.out_point!, SwapBuyReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
-      swapBuyReqs.push(new SwapBuyReq(cell, script!))
+      const input = SwapBuyReq.fromCell(cell, script!)
+      if (!input) {
+        continue
+      }
+      swapBuyReqs.push(input!)
     }
     //==============
 
@@ -133,9 +138,14 @@ export default class ScanService {
 
       const script = await this.#rpcService.getLockScript(cell.out_point!, SwapSellReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
-      swapSellReqs.push(new SwapSellReq(cell, script!))
+      const input = SwapSellReq.fromCell(cell, script!)
+      if (!input) {
+        continue
+      }
+      swapSellReqs.push(input!)
     }
 
     //==============
@@ -143,13 +153,19 @@ export default class ScanService {
       toBlock: tip,
       ...LIQUIDITY_ADD_REQ_QUERY_OPTION,
     })
+    //this.#info('LIQUIDITY_ADD_REQ_QUERY_OPTION: '+JSONbig.stringify(LIQUIDITY_ADD_REQ_QUERY_OPTION,null,2))
     const liquidityAddReqs: Array<LiquidityAddReq> = []
     for await (const cell of liquidityAddReqCollector.collect()) {
       const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityAddReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
-      liquidityAddReqs.push(new LiquidityAddReq(cell, script))
+      const input = LiquidityAddReq.fromCell(cell, script!)
+      if (!input) {
+        continue
+      }
+      liquidityAddReqs.push(input!)
     }
 
     //==============
@@ -161,15 +177,20 @@ export default class ScanService {
     for await (const cell of liquidityRemoveReqCollector.collect()) {
       const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityRemoveReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
-      liquidityRemoveReqs.push(new LiquidityRemoveReq(cell, script))
+      const input = LiquidityRemoveReq.fromCell(cell, script!)
+      if (!input) {
+        continue
+      }
+      liquidityRemoveReqs.push(input!)
     }
 
     return [liquidityAddReqs, liquidityRemoveReqs, swapBuyReqs, swapSellReqs]
   }
 
-  scanMatcherChange = async (tip?: string): Promise<MatcherChange> => {
+  private scanMatcherChange = async (tip?: string): Promise<MatcherChange> => {
     const MatcherCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...MATCHER_QUERY_OPTION,
@@ -186,7 +207,7 @@ export default class ScanService {
     return matcherChange
   }
 
-  scanInfoCell = async (tip?: string): Promise<[Info, Pool]> => {
+  private scanInfoCell = async (tip?: string): Promise<[Info, Pool]> => {
     const infoCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
       ...INFO_QUERY_OPTION,
@@ -194,10 +215,9 @@ export default class ScanService {
     let info: Info | null = null
     for await (const cell of infoCellCollector.collect()) {
       info = Info.fromCell(cell)
-      this.#info('info cell: ' + JSONbig.stringify(info, null, 2))
+      //this.#info('info cell: ' + JSONbig.stringify(info, null, 2))
       break
     }
-
 
     const poolCellCollector = new CellCollector(this.#knex, {
       toBlock: tip,
@@ -205,7 +225,7 @@ export default class ScanService {
     })
     let pool: Pool | null = null
     for await (const cell of poolCellCollector.collect()) {
-      this.#info("pool cell: "+ JSONbig.stringify(cell,null,2))
+      //this.#info("pool cell: "+ JSONbig.stringify(cell,null,2))
       pool = Pool.fromCell(cell)
       break
     }

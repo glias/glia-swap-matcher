@@ -1,5 +1,6 @@
 import { Cell, OutPoint } from '@ckb-lumos/base'
 import {
+  defaultOutPoint,
   leHexToBigIntUint128,
   remove0xPrefix,
   scriptHash,
@@ -24,8 +25,8 @@ define INFO_CAPACITY = 250 * 10^8
 capacity: - 8 bytes
 data: - 80 bytes
     ckb_reserve: u128 16 bytes
-    sudt_reserve: u128
-    total_liquidity: u128
+    sudt_reserve: u128 16 bytes
+    total_liquidity: u128 16 bytes
     liquidity_sudt_type_hash: 32 bytes
 type: - 65 bytes
     code: INFO_TYPE_CODE_HASH - 32 bytes + 1 byte
@@ -43,21 +44,26 @@ export class Info implements CellInputType, CellOutputType {
   ckbReserve: bigint
   sudtReserve: bigint
   totalLiquidity: bigint
-  // we don't care liquidity_sudt_type_hash_32
-  // we don't care args of type script and lock script cause it keep at runtime
+
+  readonly ckbReserveOriginal: bigint
+  readonly sudtReserveOriginal: bigint
+  readonly totalLiquidityOriginal: bigint
 
   // keep the txHash to trace the Info cell
   outPoint: OutPoint
 
-  constructor(cell: Cell) {
-    const args = cell.data.substring(2)
-    this.capacity = BigInt(cell.cell_output.capacity)
+  constructor(capacity: bigint, ckbReserve: bigint, sudtReserve: bigint, totalLiquidity: bigint, outPoint: OutPoint) {
+    this.capacity = capacity
 
-    this.ckbReserve = leHexToBigIntUint128(args.substring(0, 32))
-    this.sudtReserve = leHexToBigIntUint128(args.substring(32, 64))
-    this.totalLiquidity = leHexToBigIntUint128(args.substring(64, 96))
+    this.ckbReserve = ckbReserve
+    this.sudtReserve = sudtReserve
+    this.totalLiquidity = totalLiquidity
 
-    this.outPoint = cell.out_point!
+    this.ckbReserveOriginal = ckbReserve
+    this.sudtReserveOriginal = sudtReserve
+    this.totalLiquidityOriginal = totalLiquidity
+
+    this.outPoint = outPoint
   }
 
   static validate(cell: Cell): boolean {
@@ -93,7 +99,20 @@ export class Info implements CellInputType, CellOutputType {
       return null
     }
 
-    return new Info(cell)
+    const args = cell.data.substring(2)
+    let capacity = BigInt(cell.cell_output.capacity)
+
+    let ckbReserve = leHexToBigIntUint128(args.substring(0, 32))
+    let sudtReserve = leHexToBigIntUint128(args.substring(32, 64))
+    let totalLiquidity = leHexToBigIntUint128(args.substring(64, 96))
+
+    let outPoint = cell.out_point!
+
+    return new Info(capacity, ckbReserve, sudtReserve, totalLiquidity, outPoint)
+  }
+
+  static default(): Info {
+    return new Info(0n, 0n, 0n, 0n, defaultOutPoint)
   }
 
   static cloneWith(info: Info, txHash: string, index: string): Info {

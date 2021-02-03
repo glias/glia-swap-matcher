@@ -6,7 +6,7 @@ type null
 data null
 */
 import { CellOutputType } from './interfaces/CellOutputType'
-import { Uint64BigIntToHex } from '../../../utils/tools'
+import { defaultScript, Uint64BigIntToHex } from '../../../utils/tools'
 
 export class Ckb implements CellOutputType {
   static CKB_FIXED_MIN_CAPACITY = BigInt(73 * 10 ** 8)
@@ -22,6 +22,10 @@ export class Ckb implements CellOutputType {
 
   static from(capacity: bigint, originalUserLock: CKBComponents.Script): Ckb {
     return new Ckb(capacity, originalUserLock)
+  }
+
+  static default(): Ckb {
+    return new Ckb(0n, defaultScript)
   }
 
   toCellOutput(): CKBComponents.CellOutput {

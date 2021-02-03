@@ -15,8 +15,8 @@ export enum DealStatus {
 @Unique(['txHash'])
 export class Deal {
   @Index({ unique: true })
-  @PrimaryGeneratedColumn('increment', { name: 'id' })
-  id!: string
+  @PrimaryGeneratedColumn('increment', { name: 'id', type: 'integer' })
+  id!: number
 
   // this deal's tx hash
   @Column('varchar', { name: 'tx_hash' })
@@ -42,7 +42,7 @@ export class Deal {
   @Column('varchar', { name: 'matcherChange' })
   matcherChange!: string
 
-  //处理了哪些req,[xxxx-x,xxxx-x,xxxx-x]
+  //处理了哪些req,[0x????-0x??,0x????-0x??,0x????-0x??]
   @Column('varchar', { name: 'req_outpoint' })
   reqOutpoints!: string
 

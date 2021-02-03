@@ -21,7 +21,8 @@
     "emitDecoratorMetadata": true,
     "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "allowJs": true
   },
-  "exclude": ["**/*.spec.ts", "./jest.config.ts" ]
+  "exclude": ["**/*.spec.ts", "./jest.config.ts" ,"**/*.mol", "./lib/**/*"]
 }

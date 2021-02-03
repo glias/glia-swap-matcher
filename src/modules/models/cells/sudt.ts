@@ -1,4 +1,4 @@
-import { Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
+import { defaultScript, Uint128BigIntToLeHex, Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { SUDT_TYPE_SCRIPT } from '../../../utils/envs'
 
@@ -27,6 +27,10 @@ export class Sudt implements CellOutputType {
 
   static from(sudtAmount: bigint, originalUserLock: CKBComponents.Script): Sudt {
     return new Sudt(sudtAmount, originalUserLock)
+  }
+
+  static default(): Sudt {
+    return new Sudt(0n, defaultScript)
   }
 
   toCellOutput(): CKBComponents.CellOutput {

@@ -14,8 +14,7 @@ import { MatcherChange } from '../models/cells/matcherChange'
 import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
 import { LiquidityRemoveTransformation } from '../models/transformation/liquidityRemoveTransformation'
 import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
-import { LiquidityMatch } from '../models/matches/liquidityMatch'
-import { SwapMatch } from '../models/matches/swapMatch'
+import { MatchRecord } from '../models/matches/matchRecord'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
 import JSONbig from 'json-bigint'
@@ -28,7 +27,7 @@ export default class TaskService {
   readonly #matcherService: MatcherService
   readonly #transactionService: TransactionService
 
-  readonly #schedule = '*/5 * * * * *'
+  readonly #schedule = '*/2 * * * * *'
 
   #cronLock: boolean = false
 
@@ -38,7 +37,6 @@ export default class TaskService {
   #error = (msg: string) => {
     logger.error(`TaskService: ${msg}`)
   }
-
 
   constructor(
     @inject(new LazyServiceIdentifer(() => modules[ScanService.name])) scanService: ScanService,
@@ -53,9 +51,6 @@ export default class TaskService {
     this.#matcherService = matcherService
     this.#transactionService = transactionService
   }
-
-  //每个5秒钟扫描所有的pending tx和读取req cells
-  //如果订阅的changed事件收到,则提前读取req cells
 
   start = async () => {
     new CronJob(this.#schedule, this.wrapperedTask, null, true)
@@ -74,7 +69,7 @@ export default class TaskService {
     }
   }
 
-  // 定时启动
+  // registered into cron job
   readonly task = async () => {
     this.#info('task job: ' + new Date())
     // step 1, get latest info cell and scan all reqs
@@ -100,10 +95,10 @@ export default class TaskService {
     // and force re-send again :)
 
     let scanRes = await this.#scanService.scanAll()
-    if (!scanRes) {
-      return
-    }
-    let [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = scanRes
+    // console.log('scanRes: '+JSONbig.stringify(scanRes))
+    let addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange
+
+    [addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange] = scanRes
 
     // use the info's outpoint to search our db
     // the result may be null, may present with Committed, or may present with Sent
@@ -122,11 +117,15 @@ export default class TaskService {
         // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
         let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
         await this.#dealService.updateDealsStatus(sentDealsStatus)
+
+        sentDeals = await this.#dealService.getAllSentDeals()
       }
 
       // based on the current situation, do a new matching job
+      // check sent txs, because although the we lose domination, but we may have composed txs
 
-      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
+      await this.continue(sentDeals,addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
+
     } else {
       // the info is in our deal tx, we dominate the matching
 
@@ -137,52 +136,63 @@ export default class TaskService {
       // 2nd, get the latest sent deal by sort 'id'
       let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
 
-      // now we check Sent deals one by one to see if any input req are used by users
+      await this.continue(sentDeals,addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
+    }
+  }
 
-      // map into the outpoint
-      let xformReqOutpoints = [addXforms, removeXforms, buyXforms, sellXforms].flatMap(xforms => {
-        // @ts-ignore
-        return xforms.map(xform => xform.request.getOutPoint)
-      })
+  continue = async (sentDeals: Array<Deal>,
+                    addXforms: Array<LiquidityAddTransformation>,
+                    removeXforms:Array<LiquidityRemoveTransformation>,
+                    sellXforms:Array<SwapSellTransformation>,
+                    buyXforms:Array<SwapBuyTransformation>,
+                    info:Info,
+                    pool:Pool,
+                    matcherChange:MatcherChange) =>{
+    // now we check Sent deals one by one to see if any input req are used by users
 
-      let drop = false
-      for (let sentDeal of sentDeals) {
-        if (drop) {
-          this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
-          continue
-        }
+    // map into the outpoint
+    let xformReqOutpoints = [addXforms, removeXforms, buyXforms, sellXforms].flatMap(xforms => {
+      // @ts-ignore
+      return xforms.map(xform => xform.request.getOutPoint())
+    })
 
-        let fine = true
-        let sentReqOutpoints: Array<string> = sentDeal.reqOutpoints.split(',')
+    let drop = false
+    for (let sentDeal of sentDeals) {
+      if (drop) {
+        this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
+        continue
+      }
 
-        for (let sentReqOutpoint of sentReqOutpoints) {
-          if (!xformReqOutpoints.includes(sentReqOutpoint)) {
-            // the req is used buy client
-            fine = false
-            break
-          }
-        }
+      let fine = true
+      let sentReqOutpoints: Array<string> = sentDeal.reqOutpoints.split(',')
 
-        if (fine) {
-          // re-send the deal tx and remove those reqs in the request list
-          await this.#rpcService.sendTransaction(JSONbig.parse(sentDeal.tx))
-
-          addXforms = addXforms.filter(addXform => !sentReqOutpoints.includes(addXform.request.getOutPoint()))
-          removeXforms = removeXforms.filter(
-            removeXform => !sentReqOutpoints.includes(removeXform.request.getOutPoint()),
-          )
-          buyXforms = buyXforms.filter(buyXform => !sentReqOutpoints.includes(buyXform.request.getOutPoint()))
-          sellXforms = sellXforms.filter(sellXform => !sentReqOutpoints.includes(sellXform.request.getOutPoint()))
-        } else {
-          // cut off this deal tx and those following it, do a new match
-          this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
-          drop = true
+      for (let sentReqOutpoint of sentReqOutpoints) {
+        if (!xformReqOutpoints.includes(sentReqOutpoint)) {
+          // the req is used buy client
+          fine = false
+          break
         }
       }
-      // now do the matching job
-      // if some deals is cut off, there likely to be a new match (reqs in the deals still remains), maybe not
-      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
+
+      if (fine) {
+        // re-send the deal tx and remove those reqs in the request list
+        await this.#rpcService.sendTransaction(JSONbig.parse(sentDeal.tx))
+
+        addXforms = addXforms.filter(addXform => !sentReqOutpoints.includes(addXform.request.getOutPoint()))
+        removeXforms = removeXforms.filter(
+          removeXform => !sentReqOutpoints.includes(removeXform.request.getOutPoint()),
+        )
+        buyXforms = buyXforms.filter(buyXform => !sentReqOutpoints.includes(buyXform.request.getOutPoint()))
+        sellXforms = sellXforms.filter(sellXform => !sentReqOutpoints.includes(sellXform.request.getOutPoint()))
+      } else {
+        // cut off this deal tx and those following it, do a new match
+        this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
+        drop = true
+      }
     }
+    // now do the matching job
+    // if some deals is cut off, there likely to be a new match (reqs in the deals still remains), maybe not
+    await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
   }
 
   handler = async (
@@ -200,62 +210,43 @@ export default class TaskService {
       return
     }
 
-    let liquidityMatch: LiquidityMatch = new LiquidityMatch(info, pool, matcherChange, addXforms, removeXforms)
-    this.#matcherService.matchLiquidity(liquidityMatch)
+    let matchRecord: MatchRecord = new MatchRecord(
+      info,
+      pool,
+      matcherChange,
+      swapSellXforms,
+      swapBuyforms,
+      addXforms,
+      removeXforms,
+    )
+    this.#matcherService.match(matchRecord)
 
-    let newInfo, newPool, newMatcherChange
-    ;[newInfo, newPool, newMatcherChange] = this.#transactionService.composeLiquidityTransaction(liquidityMatch)
+    this.#transactionService.composeTransaction(matchRecord)
 
-    if (!liquidityMatch.skip) {
+    if (!matchRecord.skip) {
       let outpointsProcessed: Array<string> = []
-      outpointsProcessed = outpointsProcessed.concat(liquidityMatch.addXforms.map(xform => xform.request.getOutPoint()))
-      outpointsProcessed = outpointsProcessed.concat(
-        liquidityMatch.removeXforms.map(xform => xform.request.getOutPoint()),
-      )
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.sellXforms.map(xform => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.buyXforms.map(xform => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.addXforms.map(xform => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.removeXforms.map(xform => xform.request.getOutPoint()))
 
-      await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
+      await this.#rpcService.sendTransaction(matchRecord.composedTx!)
 
+      // @ts-ignore
       const deal: Omit<Deal, 'createdAt' | 'id'> = {
-        txHash: liquidityMatch.composedTxHash!,
-        preTxHash: liquidityMatch.info.outPoint.tx_hash,
-        tx: JSONbig.stringify(liquidityMatch.composedTx),
-        info: JSONbig.stringify(liquidityMatch.info),
-        pool: JSONbig.stringify(liquidityMatch.pool),
-        matcherChange: JSONbig.stringify(liquidityMatch.matcherChange),
-        reqOutpoints: outpointsProcessed.join(','),
-        status: DealStatus.Sent,
-      }
-      await this.#dealService.saveDeal(deal)
-    }
-
-    // the info, pool, and matcherChange should base on liquidity tx
-    // if the liquidity match is skipped, the info, pool and matcherChange should not be modified
-    let swapMatch: SwapMatch = new SwapMatch(newInfo, newPool, newMatcherChange, swapBuyforms, swapSellXforms)
-
-    this.#matcherService.matchSwap(swapMatch)
-
-    this.#transactionService.composeSwapTransaction(swapMatch)
-
-    if (!swapMatch.skip) {
-      let outpointsProcessed: Array<string> = []
-      outpointsProcessed = outpointsProcessed.concat(swapMatch.buyXforms.map(xform => xform.request.getOutPoint()))
-      outpointsProcessed = outpointsProcessed.concat(swapMatch.sellXforms.map(xform => xform.request.getOutPoint()))
-
-      await this.#rpcService.sendTransaction(swapMatch.composedTx!)
-
-      const deal: Omit<Deal, 'createdAt' | 'id'> = {
-        txHash: swapMatch.composedTxHash!,
-        preTxHash: swapMatch.info.outPoint.tx_hash,
-        tx: JSONbig.stringify(swapMatch.composedTx),
-        info: JSONbig.stringify(swapMatch.info),
-        pool: JSONbig.stringify(swapMatch.pool),
-        matcherChange: JSONbig.stringify(swapMatch.matcherChange),
+        txHash: matchRecord.composedTxHash!,
+        preTxHash: matchRecord.info.outPoint.tx_hash,
+        tx: JSONbig.stringify(matchRecord.composedTx),
+        info: JSONbig.stringify(matchRecord.info),
+        pool: JSONbig.stringify(matchRecord.pool),
+        matcherChange: JSONbig.stringify(matchRecord.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
       await this.#dealService.saveDeal(deal)
     }
   }
+
   handlerInit = async (
     addXforms: Array<LiquidityAddTransformation>,
     info: Info,
@@ -265,16 +256,32 @@ export default class TaskService {
     // have to init
     if (addXforms.length == 0) {
       // have to init but no one add liquidity, have to quit
+
+      this.#info('have remove, sell or add requests, but no add for init liquidity')
       return
     }
 
-    let liquidityMatch: LiquidityMatch = new LiquidityMatch(info, pool, matcherChange, [], [])
-    liquidityMatch.initXforms = new LiquidityInitTransformation(addXforms[0].request)
+    let matchRecord: MatchRecord = new MatchRecord(info, pool, matcherChange, [], [], addXforms, [])
+    matchRecord.initXforms = new LiquidityInitTransformation(addXforms[0].request)
+    matchRecord.addXforms = []
 
-    this.#matcherService.initLiquidity(liquidityMatch)
-    liquidityMatch.matcherChange.reduceBlockMinerFee()
+    this.#matcherService.initLiquidity(matchRecord)
 
-    this.#transactionService.composeLiquidityInitTransaction(liquidityMatch)
-    await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
+    this.#transactionService.composeLiquidityInitTransaction(matchRecord)
+
+    // @ts-ignore
+    const deal: Omit<Deal, 'createdAt' | 'id'> = {
+      txHash: matchRecord.composedTxHash!,
+      preTxHash: matchRecord.info.outPoint.tx_hash,
+      tx: JSONbig.stringify(matchRecord.composedTx),
+      info: JSONbig.stringify(matchRecord.info),
+      pool: JSONbig.stringify(matchRecord.pool),
+      matcherChange: JSONbig.stringify(matchRecord.matcherChange),
+      reqOutpoints: matchRecord.initXforms.request.getOutPoint(),
+      status: DealStatus.Sent,
+    }
+    await this.#dealService.saveDeal(deal)
+
+    await this.#rpcService.sendTransaction(matchRecord.composedTx!)
   }
 }
