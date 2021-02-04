@@ -13,4 +13,4 @@ RUN yarn build
 
 EXPOSE 8080
 
-CMD [ "node", "./lib/index.js" ]
+CMD [ "npm", "run", "start:glia:prod" ]
