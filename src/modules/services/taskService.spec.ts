@@ -101,14 +101,7 @@ class MockTransactionService {
     return null
   })
   // @ts-ignore
-  composeLiquidityTransaction = jest.fn().mockImplementation(() => {
-    return null
-  })
-  composeSwapTransaction = jest.fn().mockImplementation(() => {
-    return null
-  })
-
-  signWitness = jest.fn().mockImplementation(() => {
+  composeTransaction = jest.fn().mockImplementation(() => {
     return null
   })
 }

@@ -31,6 +31,8 @@ import { SwapSellTransformation } from '../models/transformation/swapSellTransfo
 import { SwapSellReq } from '../models/cells/swapSellReq'
 import { bigIntToHex } from '../../utils/tools'
 import { logger } from '../../utils/logger'
+// @ts-ignore
+import JSONbig from 'json-bigint'
 
 @injectable()
 export default class ScanService {

@@ -79,7 +79,7 @@ function serializeTable(buffers) {
   return buffer
 }
 
-export class Uint32 {
+class Uint32 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -112,13 +112,13 @@ export class Uint32 {
   }
 }
 
-export function SerializeUint32(value) {
+function SerializeUint32(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 4)
   return buffer
 }
 
-export class Uint64 {
+class Uint64 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -151,13 +151,13 @@ export class Uint64 {
   }
 }
 
-export function SerializeUint64(value) {
+function SerializeUint64(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 8)
   return buffer
 }
 
-export class Uint128 {
+class Uint128 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -182,13 +182,13 @@ export class Uint128 {
   }
 }
 
-export function SerializeUint128(value) {
+function SerializeUint128(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 16)
   return buffer
 }
 
-export class Byte32 {
+class Byte32 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -213,13 +213,13 @@ export class Byte32 {
   }
 }
 
-export function SerializeByte32(value) {
+function SerializeByte32(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 32)
   return buffer
 }
 
-export class Uint256 {
+class Uint256 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -244,13 +244,13 @@ export class Uint256 {
   }
 }
 
-export function SerializeUint256(value) {
+function SerializeUint256(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 32)
   return buffer
 }
 
-export class Bytes {
+class Bytes {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -279,7 +279,7 @@ export class Bytes {
   }
 }
 
-export function SerializeBytes(value) {
+function SerializeBytes(value) {
   const item = assertArrayBuffer(value)
   const array = new Uint8Array(4 + item.byteLength)
   new DataView(array.buffer).setUint32(0, item.byteLength, true)
@@ -287,7 +287,7 @@ export function SerializeBytes(value) {
   return array.buffer
 }
 
-export class BytesOpt {
+class BytesOpt {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -310,7 +310,7 @@ export class BytesOpt {
   }
 }
 
-export function SerializeBytesOpt(value) {
+function SerializeBytesOpt(value) {
   if (value) {
     return SerializeBytes(value)
   } else {
@@ -318,7 +318,7 @@ export function SerializeBytesOpt(value) {
   }
 }
 
-export class BytesVec {
+class BytesVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -352,11 +352,11 @@ export class BytesVec {
   }
 }
 
-export function SerializeBytesVec(value) {
+function SerializeBytesVec(value) {
   return serializeTable(value.map(item => SerializeBytes(item)))
 }
 
-export class Byte32Vec {
+class Byte32Vec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -385,7 +385,7 @@ export class Byte32Vec {
   }
 }
 
-export function SerializeByte32Vec(value) {
+function SerializeByte32Vec(value) {
   const array = new Uint8Array(4 + Byte32.size() * value.length)
   new DataView(array.buffer).setUint32(0, value.length, true)
   for (let i = 0; i < value.length; i++) {
@@ -395,7 +395,7 @@ export function SerializeByte32Vec(value) {
   return array.buffer
 }
 
-export class ScriptOpt {
+class ScriptOpt {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -418,7 +418,7 @@ export class ScriptOpt {
   }
 }
 
-export function SerializeScriptOpt(value) {
+function SerializeScriptOpt(value) {
   if (value) {
     return SerializeScript(value)
   } else {
@@ -426,7 +426,7 @@ export function SerializeScriptOpt(value) {
   }
 }
 
-export class ProposalShortId {
+class ProposalShortId {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -451,13 +451,13 @@ export class ProposalShortId {
   }
 }
 
-export function SerializeProposalShortId(value) {
+function SerializeProposalShortId(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 10)
   return buffer
 }
 
-export class UncleBlockVec {
+class UncleBlockVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -491,11 +491,11 @@ export class UncleBlockVec {
   }
 }
 
-export function SerializeUncleBlockVec(value) {
+function SerializeUncleBlockVec(value) {
   return serializeTable(value.map(item => SerializeUncleBlock(item)))
 }
 
-export class TransactionVec {
+class TransactionVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -529,11 +529,11 @@ export class TransactionVec {
   }
 }
 
-export function SerializeTransactionVec(value) {
+function SerializeTransactionVec(value) {
   return serializeTable(value.map(item => SerializeTransaction(item)))
 }
 
-export class ProposalShortIdVec {
+class ProposalShortIdVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -565,7 +565,7 @@ export class ProposalShortIdVec {
   }
 }
 
-export function SerializeProposalShortIdVec(value) {
+function SerializeProposalShortIdVec(value) {
   const array = new Uint8Array(4 + ProposalShortId.size() * value.length)
   new DataView(array.buffer).setUint32(0, value.length, true)
   for (let i = 0; i < value.length; i++) {
@@ -575,7 +575,7 @@ export function SerializeProposalShortIdVec(value) {
   return array.buffer
 }
 
-export class CellDepVec {
+class CellDepVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -606,7 +606,7 @@ export class CellDepVec {
   }
 }
 
-export function SerializeCellDepVec(value) {
+function SerializeCellDepVec(value) {
   const array = new Uint8Array(4 + CellDep.size() * value.length)
   new DataView(array.buffer).setUint32(0, value.length, true)
   for (let i = 0; i < value.length; i++) {
@@ -616,7 +616,7 @@ export function SerializeCellDepVec(value) {
   return array.buffer
 }
 
-export class CellInputVec {
+class CellInputVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -647,7 +647,7 @@ export class CellInputVec {
   }
 }
 
-export function SerializeCellInputVec(value) {
+function SerializeCellInputVec(value) {
   const array = new Uint8Array(4 + CellInput.size() * value.length)
   new DataView(array.buffer).setUint32(0, value.length, true)
   for (let i = 0; i < value.length; i++) {
@@ -657,7 +657,7 @@ export function SerializeCellInputVec(value) {
   return array.buffer
 }
 
-export class CellOutputVec {
+class CellOutputVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -691,11 +691,11 @@ export class CellOutputVec {
   }
 }
 
-export function SerializeCellOutputVec(value) {
+function SerializeCellOutputVec(value) {
   return serializeTable(value.map(item => SerializeCellOutput(item)))
 }
 
-export class Script {
+class Script {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -734,7 +734,7 @@ export class Script {
   }
 }
 
-export function SerializeScript(value) {
+function SerializeScript(value) {
   const buffers = []
   buffers.push(SerializeByte32(value.code_hash))
   const hashTypeView = new DataView(new ArrayBuffer(1))
@@ -744,7 +744,7 @@ export function SerializeScript(value) {
   return serializeTable(buffers)
 }
 
-export class OutPoint {
+class OutPoint {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -770,7 +770,7 @@ export class OutPoint {
   }
 }
 
-export function SerializeOutPoint(value) {
+function SerializeOutPoint(value) {
   const array = new Uint8Array(0 + Byte32.size() + Uint32.size())
   const view = new DataView(array.buffer)
   array.set(new Uint8Array(SerializeByte32(value.tx_hash)), 0)
@@ -778,7 +778,7 @@ export function SerializeOutPoint(value) {
   return array.buffer
 }
 
-export class CellInput {
+class CellInput {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -806,7 +806,7 @@ export class CellInput {
   }
 }
 
-export function SerializeCellInput(value) {
+function SerializeCellInput(value) {
   const array = new Uint8Array(0 + Uint64.size() + OutPoint.size())
   const view = new DataView(array.buffer)
   array.set(new Uint8Array(SerializeUint64(value.since)), 0)
@@ -814,7 +814,7 @@ export function SerializeCellInput(value) {
   return array.buffer
 }
 
-export class CellOutput {
+class CellOutput {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -851,7 +851,7 @@ export class CellOutput {
   }
 }
 
-export function SerializeCellOutput(value) {
+function SerializeCellOutput(value) {
   const buffers = []
   buffers.push(SerializeUint64(value.capacity))
   buffers.push(SerializeScript(value.lock))
@@ -859,7 +859,7 @@ export function SerializeCellOutput(value) {
   return serializeTable(buffers)
 }
 
-export class CellDep {
+class CellDep {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -884,7 +884,7 @@ export class CellDep {
   }
 }
 
-export function SerializeCellDep(value) {
+function SerializeCellDep(value) {
   const array = new Uint8Array(0 + OutPoint.size() + 1)
   const view = new DataView(array.buffer)
   array.set(new Uint8Array(SerializeOutPoint(value.out_point)), 0)
@@ -892,7 +892,7 @@ export function SerializeCellDep(value) {
   return array.buffer
 }
 
-export class RawTransaction {
+class RawTransaction {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -953,7 +953,7 @@ export class RawTransaction {
   }
 }
 
-export function SerializeRawTransaction(value) {
+function SerializeRawTransaction(value) {
   const buffers = []
   buffers.push(SerializeUint32(value.version))
   buffers.push(SerializeCellDepVec(value.cell_deps))
@@ -964,7 +964,7 @@ export function SerializeRawTransaction(value) {
   return serializeTable(buffers)
 }
 
-export class Transaction {
+class Transaction {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -993,14 +993,14 @@ export class Transaction {
   }
 }
 
-export function SerializeTransaction(value) {
+function SerializeTransaction(value) {
   const buffers = []
   buffers.push(SerializeRawTransaction(value.raw))
   buffers.push(SerializeBytesVec(value.witnesses))
   return serializeTable(buffers)
 }
 
-export class RawHeader {
+class RawHeader {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -1181,7 +1181,7 @@ export class RawHeader {
   }
 }
 
-export function SerializeRawHeader(value) {
+function SerializeRawHeader(value) {
   const array = new Uint8Array(
     0 +
       Uint32.size() +
@@ -1244,7 +1244,7 @@ export function SerializeRawHeader(value) {
   return array.buffer
 }
 
-export class Header {
+class Header {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -1272,7 +1272,7 @@ export class Header {
   }
 }
 
-export function SerializeHeader(value) {
+function SerializeHeader(value) {
   const array = new Uint8Array(0 + RawHeader.size() + Uint128.size())
   const view = new DataView(array.buffer)
   array.set(new Uint8Array(SerializeRawHeader(value.raw)), 0)
@@ -1280,7 +1280,7 @@ export function SerializeHeader(value) {
   return array.buffer
 }
 
-export class UncleBlock {
+class UncleBlock {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -1309,14 +1309,14 @@ export class UncleBlock {
   }
 }
 
-export function SerializeUncleBlock(value) {
+function SerializeUncleBlock(value) {
   const buffers = []
   buffers.push(SerializeHeader(value.header))
   buffers.push(SerializeProposalShortIdVec(value.proposals))
   return serializeTable(buffers)
 }
 
-export class Block {
+class Block {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -1361,7 +1361,7 @@ export class Block {
   }
 }
 
-export function SerializeBlock(value) {
+function SerializeBlock(value) {
   const buffers = []
   buffers.push(SerializeHeader(value.header))
   buffers.push(SerializeUncleBlockVec(value.uncles))
@@ -1370,7 +1370,7 @@ export function SerializeBlock(value) {
   return serializeTable(buffers)
 }
 
-export class CellbaseWitness {
+class CellbaseWitness {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -1399,14 +1399,14 @@ export class CellbaseWitness {
   }
 }
 
-export function SerializeCellbaseWitness(value) {
+function SerializeCellbaseWitness(value) {
   const buffers = []
   buffers.push(SerializeScript(value.lock))
   buffers.push(SerializeBytes(value.message))
   return serializeTable(buffers)
 }
 
-export class WitnessArgs {
+class WitnessArgs {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -1443,10 +1443,15 @@ export class WitnessArgs {
   }
 }
 
-export function SerializeWitnessArgs(value) {
+function SerializeWitnessArgs(value) {
   const buffers = []
   buffers.push(SerializeBytesOpt(value.lock))
   buffers.push(SerializeBytesOpt(value.input_type))
   buffers.push(SerializeBytesOpt(value.output_type))
   return serializeTable(buffers)
+}
+
+module.exports = {
+  Script : Script,
+  WitnessArgs : WitnessArgs
 }

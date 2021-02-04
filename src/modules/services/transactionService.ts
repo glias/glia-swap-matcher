@@ -4,7 +4,7 @@ import CKB from '@nervosnetwork/ckb-sdk-core'
 import { MatchRecord } from '../models/matches/matchRecord'
 import JSONbig from 'json-bigint'
 import { logger } from '../../utils/logger'
-import { remove0xPrefix, Uint64BigIntToLeHex } from '../../utils/tools'
+import { Uint64BigIntToLeHex } from '../../utils/tools'
 
 /*
 this service compose tx for rpc
@@ -41,7 +41,6 @@ export default class TransactionService {
     }
 
     let swapNumber: number = 0
-    let liquidityNumber: number = 0
 
     const inputs: Array<CKBComponents.CellInput> = []
     let outputs: Array<CKBComponents.CellOutput> = []
@@ -91,8 +90,6 @@ export default class TransactionService {
       inputs.push(addXform.toCellInput())
       outputs = outputs.concat(addXform.toCellOutput())
       outputsData = outputsData.concat(addXform.toCellOutputData())
-
-      liquidityNumber++
     }
 
     for (let removeXform of matchRecord.removeXforms) {
@@ -103,12 +100,10 @@ export default class TransactionService {
       inputs.push(removeXform.toCellInput())
       outputs = outputs.concat(removeXform.toCellOutput())
       outputsData = outputsData.concat(removeXform.toCellOutputData())
-
-      liquidityNumber++
     }
 
     // compose tx
-    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData, swapNumber, liquidityNumber)
+    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData, swapNumber)
     this.#info('composed tx: ' + JSONbig.stringify(signedTx, null, 2))
     this.#info('composed txHash: ' + txHash)
 
@@ -139,7 +134,7 @@ export default class TransactionService {
     outputs = outputs.concat(liquidityMatch.initXforms!.toCellOutput())
     outputsData = outputsData.concat(liquidityMatch.initXforms!.toCellOutputData())
 
-    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData, 0, 1)
+    const [signedTx, txHash] = this.composeTxAndSign(inputs, outputs, outputsData, 0)
     this.#info('init composed tx: ' + JSONbig.stringify(signedTx, null, 2))
     this.#info('init composed txHash: ' + txHash)
 
@@ -155,7 +150,6 @@ export default class TransactionService {
     outputs: Array<CKBComponents.CellOutput>,
     outputsData: Array<string>,
     swapNo: number,
-    liquidityNo: number,
   ): [CKBComponents.RawTransaction, string] => {
     const rawTx: CKBComponents.RawTransaction = {
       version: '0x0',
@@ -167,19 +161,18 @@ export default class TransactionService {
       outputsData: outputsData,
     }
 
-    return this.signTransaction(rawTx, swapNo, liquidityNo)
+    return this.signTransaction(rawTx, swapNo)
   }
 
   public signTransaction = (
     rawTransaction: CKBComponents.RawTransactionToSign,
     swapNo: number,
-    liquidityNo: number,
   ): [CKBComponents.RawTransaction, string] => {
     const txHash = this.#ckb.utils.rawTransactionToHash(rawTransaction)
 
     const matcherChangerWitness = this.signWitness(txHash)
 
-    const infoWitness = this.prepareInfoWitness(swapNo, liquidityNo)
+    const infoWitness = this.prepareInfoWitness(swapNo)
     const signedTx: any = {
       ...rawTransaction,
       //witnesses: [witness, ...rawTransaction.witnesses.slice(1)],
@@ -200,9 +193,9 @@ export default class TransactionService {
     })[0]
   }
 
-  public prepareInfoWitness = (swapNo: number, liquidityNo: number): StructuredWitness => {
+  public prepareInfoWitness = (swapNo: number): StructuredWitness => {
     const swapNumber = Uint64BigIntToLeHex(BigInt(swapNo))
-    const liquidityNumber = Uint64BigIntToLeHex(BigInt(liquidityNo))
-    return { lock: '', inputType: swapNumber + remove0xPrefix(liquidityNumber), outputType: '' }
+    const witnessArgs = { lock: '', inputType: swapNumber, outputType: '' }
+    return this.#ckb.utils.serializeWitnessArgs(witnessArgs)
   }
 }

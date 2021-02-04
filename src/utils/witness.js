@@ -79,7 +79,7 @@ function serializeTable(buffers) {
   return buffer
 }
 
-export class MintTokenWitness {
+class MintTokenWitness {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -118,7 +118,7 @@ export class MintTokenWitness {
   }
 }
 
-export function SerializeMintTokenWitness(value) {
+function SerializeMintTokenWitness(value) {
   const buffers = []
   const modeView = new DataView(new ArrayBuffer(1))
   modeView.setUint8(0, value.mode)
@@ -128,7 +128,7 @@ export function SerializeMintTokenWitness(value) {
   return serializeTable(buffers)
 }
 
-export class ETHSPVProof {
+class ETHSPVProof {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -189,7 +189,7 @@ export class ETHSPVProof {
   }
 }
 
-export function SerializeETHSPVProof(value) {
+function SerializeETHSPVProof(value) {
   const buffers = []
   buffers.push(SerializeUint64(value.log_index))
   buffers.push(SerializeBytes(value.log_entry_data))
@@ -200,7 +200,7 @@ export function SerializeETHSPVProof(value) {
   return serializeTable(buffers)
 }
 
-export class Bytes {
+class Bytes {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -229,7 +229,7 @@ export class Bytes {
   }
 }
 
-export function SerializeBytes(value) {
+function SerializeBytes(value) {
   const item = assertArrayBuffer(value)
   const array = new Uint8Array(4 + item.byteLength)
   new DataView(array.buffer).setUint32(0, item.byteLength, true)
@@ -237,7 +237,7 @@ export function SerializeBytes(value) {
   return array.buffer
 }
 
-export class Byte32 {
+class Byte32 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -262,13 +262,13 @@ export class Byte32 {
   }
 }
 
-export function SerializeByte32(value) {
+function SerializeByte32(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 32)
   return buffer
 }
 
-export class ETHAddress {
+class ETHAddress {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -293,13 +293,13 @@ export class ETHAddress {
   }
 }
 
-export function SerializeETHAddress(value) {
+function SerializeETHAddress(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 20)
   return buffer
 }
 
-export class BytesVec {
+class BytesVec {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -333,11 +333,11 @@ export class BytesVec {
   }
 }
 
-export function SerializeBytesVec(value) {
+function SerializeBytesVec(value) {
   return serializeTable(value.map(item => SerializeBytes(item)))
 }
 
-export class Uint64 {
+class Uint64 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -370,13 +370,13 @@ export class Uint64 {
   }
 }
 
-export function SerializeUint64(value) {
+function SerializeUint64(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 8)
   return buffer
 }
 
-export class Uint128 {
+class Uint128 {
   constructor(reader, { validate = true } = {}) {
     this.view = new DataView(assertArrayBuffer(reader))
     if (validate) {
@@ -401,8 +401,13 @@ export class Uint128 {
   }
 }
 
-export function SerializeUint128(value) {
+function SerializeUint128(value) {
   const buffer = assertArrayBuffer(value)
   assertDataLength(buffer.byteLength, 16)
   return buffer
+}
+
+module.exports = {
+  ETHSPVProof :ETHSPVProof,
+  MintTokenWitness : MintTokenWitness
 }

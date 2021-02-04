@@ -304,7 +304,7 @@ export default class MatcherService {
       matchRecord.pool.capacity += ckbAvailable
       matchRecord.pool.sudtAmount += sudtNeeded
     } else {
-      // sudt is not enough, we drain all sudts
+      // sudt is not enough, we drain all sudts and ckb remain
 
       let ckbNeeded =
         (liquidityAddXform.request.sudtAmount * matchRecord.info.ckbReserve) / matchRecord.info.sudtReserve + 1n
@@ -332,7 +332,7 @@ export default class MatcherService {
         return
       }
 
-      let lptGot = (matchRecord.info.totalLiquidity * sudtNeeded) / matchRecord.info.sudtReserve + 1n
+      let lptGot = (matchRecord.info.totalLiquidity * liquidityAddXform.request.sudtAmount) / matchRecord.info.sudtReserve + 1n
 
       matchRecord.matcherChange.capacity += liquidityAddXform.request.tips
 
