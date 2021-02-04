@@ -8,10 +8,9 @@ import { Info } from '../models/cells/info'
 import { Pool } from '../models/cells/pool'
 import { MatcherChange } from '../models/cells/matcherChange'
 import { Deal, DealStatus } from '../models/entities/deal.entity'
-import { SwapMatch } from '../models/matches/swapMatch'
-import { LiquidityMatch } from '../models/matches/liquidityMatch'
 import winston, { format, transports } from 'winston'
 
+import ScanService from './scanService'
 import TaskService from './taskService'
 import DealService from './dealService'
 import RpcService from './rpcService'
@@ -25,55 +24,22 @@ jest.setMock('../../utils/logger', {
     transports: [new transports.Console({ level: 'debug' })],
   }),
 })
-// let scanAllReturn :[
-//   Array<LiquidityAddTransformation>,
-//   Array<LiquidityRemoveTransformation>,
-//   Array<SwapBuyTransformation>,
-//   Array<SwapSellTransformation>,
-//   Info,
-//   Pool,
-//   MatcherChange,
-// ]
-
-// jest.doMock(
-//   './scanService',
-//   ()=> injectable()( class ScanService{
-//       static scanAllReturn :[
-//         Array<LiquidityAddTransformation>,
-//         Array<LiquidityRemoveTransformation>,
-//         Array<SwapBuyTransformation>,
-//         Array<SwapSellTransformation>,
-//         Info,
-//         Pool,
-//         MatcherChange,
-//       ]|null=null
-//
-//       scanAll = jest.fn().mockResolvedValue(ScanService.scanAllReturn);
-//       getTip = jest.fn().mockResolvedValue(1n);
-//       hello = jest.fn().mockReturnValue(
-//         [1,2,3]
-//       )
-//   })
-// )
+let scanAllReturn:
+  | [
+      Array<LiquidityAddTransformation>,
+      Array<LiquidityRemoveTransformation>,
+      Array<SwapBuyTransformation>,
+      Array<SwapSellTransformation>,
+      Info,
+      Pool,
+      MatcherChange,
+    ]
+  | null = null
 
 @injectable()
 class MockScanService {
-  scanAllReturn:
-    | [
-        Array<LiquidityAddTransformation>,
-        Array<LiquidityRemoveTransformation>,
-        Array<SwapBuyTransformation>,
-        Array<SwapSellTransformation>,
-        Info,
-        Pool,
-        MatcherChange,
-      ]
-    | null = null
-
-  input: Array<Number> = [0]
-
   scanAll = jest.fn().mockImplementation(() => {
-    return Promise.resolve(this.scanAllReturn)
+    return Promise.resolve(scanAllReturn)
   })
   getTip = jest.fn().mockResolvedValue(1n)
 }
@@ -81,12 +47,16 @@ class MockScanService {
 // mocked services
 
 let getAllSentDealsReturn: Array<Deal>
-let getByTxHashReturn: Deal
+let getByTxHashReturn: Deal | null
 @injectable()
 class MockDealService {
-  getAllSentDeals = jest.fn().mockResolvedValue(getAllSentDealsReturn)
+  getAllSentDeals = jest.fn().mockImplementation(() => {
+    return Promise.resolve(getAllSentDealsReturn)
+  })
   getByPreTxHash = jest.fn().mockResolvedValue(null)
-  getByTxHash = jest.fn().mockResolvedValue(getByTxHashReturn)
+  getByTxHash = jest.fn().mockImplementation(() => {
+    return Promise.resolve(getByTxHashReturn)
+  })
   saveDeal = jest.fn().mockResolvedValue(null)
   updateDealStatus = jest.fn().mockResolvedValue(undefined)
   updateDealsStatus = jest.fn().mockResolvedValue(undefined)
@@ -96,27 +66,56 @@ class MockDealService {
 let getTxsStatusReturn: Array<[string, Omit<DealStatus, DealStatus.Sent>]>
 @injectable()
 class MockRpcService {
-  getTxsStatus = jest.fn().mockResolvedValue(getTxsStatusReturn)
-  getLockScript = jest.fn().mockResolvedValue(undefined)
-  sendTransaction = jest.fn().mockResolvedValue(undefined)
+  getTxsStatus = jest.fn().mockImplementation(() => {
+    return Promise.resolve(getTxsStatusReturn)
+  })
+  getLockScript = jest.fn().mockImplementation(() => {
+    return null
+  })
+  sendTransaction = jest.fn().mockImplementation(() => {
+    return null
+  })
 }
 
-let matchSwapReturn: SwapMatch
-let matchLiquidityReturn: LiquidityMatch
+//let matchSwapReturn: SwapMatch
+//let matchLiquidityReturn: MatchRecord
 @injectable()
 class MockMatcherService {
   // @ts-ignore
-  matchSwap = jest.fn().mockImplementation(input => {
-    input = matchSwapReturn
+  matchSwap = jest.fn().mockImplementation(() => {
+    return null
   })
   // @ts-ignore
-  matchLiquidity = jest.fn().mockImplementation(input => {
-    input = matchLiquidityReturn
+  matchLiquidity = jest.fn().mockImplementation(() => {
+    return null
   })
-  initLiquidity = jest.fn().mockImplementation(input => input)
+  initLiquidity = jest.fn().mockImplementation(() => {
+    return null
+  })
 }
 
-import ScanService from './scanService'
+@injectable()
+class MockTransactionService {
+  // @ts-ignore
+  composeLiquidityInitTransaction = jest.fn().mockImplementation(() => {
+    return null
+  })
+  // @ts-ignore
+  composeLiquidityTransaction = jest.fn().mockImplementation(() => {
+    return null
+  })
+  composeSwapTransaction = jest.fn().mockImplementation(() => {
+    return null
+  })
+
+  signWitness = jest.fn().mockImplementation(() => {
+    return null
+  })
+}
+
+import { defaultOutPoint, defaultScript } from '../../utils/tools'
+import JSONbig from 'json-bigint'
+import { LiquidityAddReq } from '../models/cells/liquidityAddReq'
 
 describe('Test tasks module', () => {
   let taskService: TaskService
@@ -124,10 +123,12 @@ describe('Test tasks module', () => {
   // let mockDealService: MockDealService
   // let mockRpcService: MockRpcService
   // let mockMatcherService: MockMatcherService
-  let spyTransactionService: TransactionService
+  //let spyTransactionService: TransactionService
   // let spyTask
   // let spyHandler
-
+  // @ts-ignore
+  let signWitness
+  let handlerInit
   beforeAll(async () => {
     modules[ScanService.name] = Symbol(ScanService.name)
     modules[DealService.name] = Symbol(DealService.name)
@@ -139,7 +140,7 @@ describe('Test tasks module', () => {
     container.bind(modules[DealService.name]).to(MockDealService)
     container.bind(modules[RpcService.name]).to(MockRpcService)
     container.bind(modules[MatcherService.name]).to(MockMatcherService)
-    container.bind(modules[TransactionService.name]).to(TransactionService)
+    container.bind(modules[TransactionService.name]).to(MockTransactionService)
     container.bind(modules[TaskService.name]).to(TaskService)
 
     taskService = container.get(modules[TaskService.name])
@@ -147,17 +148,59 @@ describe('Test tasks module', () => {
     // mockDealService = container.get(modules[DealService.name])
     // mockRpcService = container.get(modules[RpcService.name])
     // mockMatcherService = container.get(modules[MatcherService.name])
-    spyTransactionService = container.get(modules[TransactionService.name])
-    jest.spyOn(spyTransactionService, 'signWitness').mockReturnValue('0x1234')
+    // mockTransactionService = container.get(modules[TransactionService.name])
+
+    handlerInit = jest.spyOn(taskService, 'handlerInit')
   })
 
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  it('do it', async () => {
-    mockScanService.input = [1, 2, 3, 4]
-    mockScanService.scanAllReturn = [[], [], [], [], Info.default(), Pool.default(), MatcherChange.default()]
+  it('init liquidity, no liquidity add xforms', async () => {
+    scanAllReturn = [[], [], [], [], Info.default(), Pool.default(), MatcherChange.default()]
+    getByTxHashReturn = null
+    getAllSentDealsReturn = []
+
     await taskService.task()
+
+    expect(handlerInit).toHaveBeenCalled()
+  })
+
+  it('init liquidity, liquidity add xforms', async () => {
+    scanAllReturn = [
+      [
+        new LiquidityAddTransformation(
+          new LiquidityAddReq(
+            BigInt(100 * 10 ** 8) + LiquidityAddReq.LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY,
+            BigInt(100 * 10 ** 8),
+            '0000000000000000000000000000000000000000000000000000000000000000',
+            '01',
+            BigInt(0 * 10 ** 8),
+            BigInt(0 * 10 ** 8),
+            '0000000000000000000000000000000000000000000000000000000000000000',
+            BigInt(0 * 10 ** 8),
+            BigInt(0 * 10 ** 8),
+            defaultScript,
+            defaultOutPoint,
+          ),
+        ),
+      ],
+      [],
+      [],
+      [],
+      Info.default(),
+      Pool.default(),
+      MatcherChange.default(),
+    ]
+
+    getByTxHashReturn = null
+    getAllSentDealsReturn = []
+
+    await taskService.task()
+
+    expect(handlerInit).toHaveBeenCalled()
+
+    console.log(JSONbig.stringify(handlerInit.mock.calls[0][0]))
   })
 })

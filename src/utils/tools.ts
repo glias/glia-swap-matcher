@@ -106,7 +106,7 @@ export function ckbBlake2b(hexStrings: Array<string>): string {
 }
 
 export const defaultOutPoint: OutPoint = {
-  tx_hash: '0x',
+  tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111111',
   index: '0x0',
 }
 

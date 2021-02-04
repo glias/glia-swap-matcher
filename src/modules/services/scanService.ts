@@ -115,6 +115,7 @@ export default class ScanService {
 
       const script = await this.#rpcService.getLockScript(cell.out_point!, SwapBuyReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
       const input = SwapBuyReq.fromCell(cell, script!)
@@ -135,6 +136,7 @@ export default class ScanService {
 
       const script = await this.#rpcService.getLockScript(cell.out_point!, SwapSellReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
       const input = SwapSellReq.fromCell(cell, script!)
@@ -154,6 +156,7 @@ export default class ScanService {
     for await (const cell of liquidityAddReqCollector.collect()) {
       const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityAddReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
       const input = LiquidityAddReq.fromCell(cell, script!)
@@ -172,6 +175,7 @@ export default class ScanService {
     for await (const cell of liquidityRemoveReqCollector.collect()) {
       const script = await this.#rpcService.getLockScript(cell.out_point!, LiquidityRemoveReq.getUserLockHash(cell))
       if (!script) {
+        this.#info('can not find user lock script: ' + cell.out_point!.tx_hash)
         continue
       }
       const input = LiquidityRemoveReq.fromCell(cell, script!)

@@ -14,8 +14,7 @@ import { MatcherChange } from '../models/cells/matcherChange'
 import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
 import { LiquidityRemoveTransformation } from '../models/transformation/liquidityRemoveTransformation'
 import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
-import { LiquidityMatch } from '../models/matches/liquidityMatch'
-import { SwapMatch } from '../models/matches/swapMatch'
+import { MatchRecord } from '../models/matches/matchRecord'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
 import JSONbig from 'json-bigint'
@@ -28,7 +27,7 @@ export default class TaskService {
   readonly #matcherService: MatcherService
   readonly #transactionService: TransactionService
 
-  readonly #schedule = '*/5 * * * * *'
+  readonly #schedule = '*/2 * * * * *'
 
   #cronLock: boolean = false
 
@@ -109,16 +108,16 @@ export default class TaskService {
       // the info is not in our deal, some one cuts off our deals, or maybe we are new to the pair
 
       // get all deal txs we sent
-      // let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
-      //
-      // if (sentDeals.length) {
-      //   let sent_deals_txHashes = sentDeals.map(deal => deal.txHash)
-      //   // get all status of our sent deal txs and update them
-      //   // some maybe set to committed
-      //   // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
-      //   let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
-      //   await this.#dealService.updateDealsStatus(sentDealsStatus)
-      // }
+      let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
+
+      if (sentDeals.length) {
+        let sent_deals_txHashes = sentDeals.map(deal => deal.txHash)
+        // get all status of our sent deal txs and update them
+        // some maybe set to committed
+        // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
+        let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
+        await this.#dealService.updateDealsStatus(sentDealsStatus)
+      }
 
       // based on the current situation, do a new matching job
 
@@ -196,60 +195,40 @@ export default class TaskService {
       return
     }
 
-    let liquidityMatch: LiquidityMatch = new LiquidityMatch(info, pool, matcherChange, addXforms, removeXforms)
-    this.#matcherService.matchLiquidity(liquidityMatch)
+    let matchRecord: MatchRecord = new MatchRecord(
+      info,
+      pool,
+      matcherChange,
+      swapSellXforms,
+      swapBuyforms,
+      addXforms,
+      removeXforms,
+    )
+    this.#matcherService.match(matchRecord)
 
-    let newInfo, newPool, newMatcherChange
-    ;[newInfo, newPool, newMatcherChange] = this.#transactionService.composeLiquidityTransaction(liquidityMatch)
+    this.#transactionService.composeTransaction(matchRecord)
 
-    if (!liquidityMatch.skip) {
+    if (!matchRecord.skip) {
       let outpointsProcessed: Array<string> = []
-      outpointsProcessed = outpointsProcessed.concat(liquidityMatch.addXforms.map(xform => xform.request.getOutPoint()))
-      outpointsProcessed = outpointsProcessed.concat(
-        liquidityMatch.removeXforms.map(xform => xform.request.getOutPoint()),
-      )
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.sellXforms.map(xform => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.buyXforms.map(xform => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.addXforms.map(xform => xform.request.getOutPoint()))
+      outpointsProcessed = outpointsProcessed.concat(matchRecord.removeXforms.map(xform => xform.request.getOutPoint()))
 
-      await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
+      await this.#rpcService.sendTransaction(matchRecord.composedTx!)
 
+      // @ts-ignore
       const deal: Omit<Deal, 'createdAt' | 'id'> = {
-        txHash: liquidityMatch.composedTxHash!,
-        preTxHash: liquidityMatch.info.outPoint.tx_hash,
-        tx: JSONbig.stringify(liquidityMatch.composedTx),
-        info: JSONbig.stringify(liquidityMatch.info),
-        pool: JSONbig.stringify(liquidityMatch.pool),
-        matcherChange: JSONbig.stringify(liquidityMatch.matcherChange),
+        txHash: matchRecord.composedTxHash!,
+        preTxHash: matchRecord.info.outPoint.tx_hash,
+        tx: JSONbig.stringify(matchRecord.composedTx),
+        info: JSONbig.stringify(matchRecord.info),
+        pool: JSONbig.stringify(matchRecord.pool),
+        matcherChange: JSONbig.stringify(matchRecord.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
-      await this.#dealService.saveDeal(deal)
-    }
-
-    // the info, pool, and matcherChange should base on liquidity tx
-    // if the liquidity match is skipped, the info, pool and matcherChange should not be modified
-    let swapMatch: SwapMatch = new SwapMatch(newInfo, newPool, newMatcherChange, swapBuyforms, swapSellXforms)
-
-    this.#matcherService.matchSwap(swapMatch)
-
-    this.#transactionService.composeSwapTransaction(swapMatch)
-
-    if (!swapMatch.skip) {
-      let outpointsProcessed: Array<string> = []
-      outpointsProcessed = outpointsProcessed.concat(swapMatch.buyXforms.map(xform => xform.request.getOutPoint()))
-      outpointsProcessed = outpointsProcessed.concat(swapMatch.sellXforms.map(xform => xform.request.getOutPoint()))
-
-      await this.#rpcService.sendTransaction(swapMatch.composedTx!)
-
-      const deal: Omit<Deal, 'createdAt' | 'id'> = {
-        txHash: swapMatch.composedTxHash!,
-        preTxHash: swapMatch.info.outPoint.tx_hash,
-        tx: JSONbig.stringify(swapMatch.composedTx),
-        info: JSONbig.stringify(swapMatch.info),
-        pool: JSONbig.stringify(swapMatch.pool),
-        matcherChange: JSONbig.stringify(swapMatch.matcherChange),
-        reqOutpoints: outpointsProcessed.join(','),
-        status: DealStatus.Sent,
-      }
-      await this.#dealService.saveDeal(deal)
+      //await this.#dealService.saveDeal(deal)
     }
   }
 
@@ -262,16 +241,18 @@ export default class TaskService {
     // have to init
     if (addXforms.length == 0) {
       // have to init but no one add liquidity, have to quit
+
+      this.#info('have remove, sell or add requests, but no add for init liquidity')
       return
     }
 
-    let liquidityMatch: LiquidityMatch = new LiquidityMatch(info, pool, matcherChange, [], [])
-    liquidityMatch.initXforms = new LiquidityInitTransformation(addXforms[0].request)
+    let matchRecord: MatchRecord = new MatchRecord(info, pool, matcherChange, [], [], addXforms, [])
+    matchRecord.initXforms = new LiquidityInitTransformation(addXforms[0].request)
+    matchRecord.addXforms = []
 
-    this.#matcherService.initLiquidity(liquidityMatch)
-    liquidityMatch.matcherChange.reduceBlockMinerFee()
+    this.#matcherService.initLiquidity(matchRecord)
 
-    this.#transactionService.composeLiquidityInitTransaction(liquidityMatch)
-    await this.#rpcService.sendTransaction(liquidityMatch.composedTx!)
+    this.#transactionService.composeLiquidityInitTransaction(matchRecord)
+    await this.#rpcService.sendTransaction(matchRecord.composedTx!)
   }
 }

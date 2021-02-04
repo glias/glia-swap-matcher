@@ -31,7 +31,7 @@ lock: - 146 bytes
 
  */
 export class LiquidityAddReq implements CellInputType {
-  static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt((235 * 10) ^ 8)
+  static LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY = BigInt(235 * 10 ** 8)
 
   // given capacity for add, the ckb is in it, should be greater than LIQUIDITY_ADD_REQUEST_FIXED_CAPACITY
   capacityAmount: bigint

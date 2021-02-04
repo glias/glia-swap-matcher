@@ -5,8 +5,7 @@ import { LiquidityRemoveTransformation } from '../models/transformation/liquidit
 import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
 import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
 import { Lpt } from '../models/cells/lpt'
-import { LiquidityMatch } from '../models/matches/liquidityMatch'
-import { SwapMatch } from '../models/matches/swapMatch'
+import { MatchRecord } from '../models/matches/matchRecord'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
 import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
 // @ts-ignore
@@ -26,20 +25,39 @@ export default class MatcherService {
 
   constructor() {}
 
-  // the context inside of SwapMatch is updated during processing match
-  matchSwap = (swapMatch: SwapMatch): void => {
-    for (let buyXform of swapMatch.buyXforms) {
-      this.processSwapBuyTransformation(swapMatch, buyXform)
+  /*
+  Info -> Info
+  Pool -> Pool
+  [removeReq] -> [removeRes(Sudt-cell)]
+  [addReq] -> [addRes(Lpt-cell + Sudt-change-cell)]
+   */
+
+  match = (matcheRecord: MatchRecord): void => {
+    for (let sellXform of matcheRecord.sellXforms) {
+      this.processSwapSellTransformation(matcheRecord, sellXform)
     }
 
-    for (let sellXform of swapMatch.sellXforms) {
-      this.processSwapSellTransformation(swapMatch, sellXform)
+    for (let buyXform of matcheRecord.buyXforms) {
+      this.processSwapBuyTransformation(matcheRecord, buyXform)
     }
 
-    if (swapMatch.buyXforms.every(xform => xform.skip) && swapMatch.sellXforms.every(xform => xform.skip)) {
-      swapMatch.skip = true
+    for (let addXform of matcheRecord.addXforms) {
+      this.processLiquidityAddTransformation(matcheRecord, addXform)
+    }
+
+    for (let removelXform of matcheRecord.removeXforms) {
+      this.processLiquidityRemoveTransformation(matcheRecord, removelXform)
+    }
+
+    if (
+      matcheRecord.sellXforms.every(xform => xform.skip) &&
+      matcheRecord.buyXforms.every(xform => xform.skip) &&
+      matcheRecord.removeXforms.every(xform => xform.skip) &&
+      matcheRecord.addXforms.every(xform => xform.skip)
+    ) {
+      matcheRecord.skip = true
     } else {
-      swapMatch.matcherChange.reduceBlockMinerFee()
+      matcheRecord.matcherChange.reduceBlockMinerFee()
     }
   }
 
@@ -52,7 +70,7 @@ export default class MatcherService {
   buy = buy sudt
   ckb -> sudt
  */
-  private processSwapBuyTransformation = (swapMatch: SwapMatch, swapBuyXform: SwapBuyTransformation): void => {
+  private processSwapBuyTransformation = (matchRecord: MatchRecord, swapBuyXform: SwapBuyTransformation): void => {
     // spend ckb to get sudt
     // ckb -> sudt
 
@@ -77,7 +95,8 @@ export default class MatcherService {
 
     let ckbIn = swapBuyXform.request.capacity - swapBuyXform.request.tips - SwapBuyTransformation.SUDT_FIXED_CAPACITY
 
-    let sudtGot = (ckbIn * 997n * swapMatch.info.sudtReserve) / (swapMatch.info.ckbReserve * 1000n + ckbIn * 997n) + 1n
+    let sudtGot =
+      (ckbIn * 997n * matchRecord.info.sudtReserve) / (matchRecord.info.ckbReserve * 1000n + ckbIn * 997n) + 1n
 
     if (sudtGot < swapBuyXform.request.amountOutMin) {
       this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash)
@@ -90,16 +109,16 @@ export default class MatcherService {
     // flush the result into Xform
     swapBuyXform.sudtAmount = sudtGot
 
-    // update context of swapMatch
+    // update context of matchRecord
     // matcher get tips
-    swapMatch.matcherChange.capacity += swapBuyXform.request.tips
+    matchRecord.matcherChange.capacity += swapBuyXform.request.tips
 
     // then all ckb, include of 0.3% as liquidity provider interest, goes into pool
-    swapMatch.info.ckbReserve += ckbIn
-    swapMatch.info.sudtReserve -= sudtGot
+    matchRecord.info.ckbReserve += ckbIn
+    matchRecord.info.sudtReserve -= sudtGot
 
-    swapMatch.pool.capacity += ckbIn
-    swapMatch.pool.sudtAmount -= sudtGot
+    matchRecord.pool.capacity += ckbIn
+    matchRecord.pool.sudtAmount -= sudtGot
   }
 
   /*
@@ -111,7 +130,7 @@ export default class MatcherService {
   sell = sell sudt
   sudt -> ckb
   */
-  private processSwapSellTransformation = (swapMatch: SwapMatch, swapSellXform: SwapSellTransformation): void => {
+  private processSwapSellTransformation = (matchRecord: MatchRecord, swapSellXform: SwapSellTransformation): void => {
     // spend sudt to get ckb
     // sudt -> ckb
 
@@ -123,8 +142,8 @@ export default class MatcherService {
     // ckb_got >= spent_sudt * 997 * ckb_reserve / (sudt_reserve * 1000 + spent_sudt * 997 )
 
     let ckbOut: bigint =
-      (swapSellXform.request.sudtAmount * 997n * swapMatch.info.ckbReserve) /
-        (swapMatch.info.sudtReserve * 1000n + swapSellXform.request.sudtAmount * 997n) +
+      (swapSellXform.request.sudtAmount * 997n * matchRecord.info.ckbReserve) /
+        (matchRecord.info.sudtReserve * 1000n + swapSellXform.request.sudtAmount * 997n) +
       1n
 
     if (ckbOut < swapSellXform.request.amountOutMin) {
@@ -148,43 +167,24 @@ export default class MatcherService {
       return
     }
 
-    swapSellXform.capacity =
-      ckbOut +
-      swapSellXform.request.capacity -
-      //SwapSellTransformation.CKB_FIXED_MIN_CAPACITY -
-      swapSellXform.request.tips
+    swapSellXform.capacity = ckbOut + swapSellXform.request.capacity - swapSellXform.request.tips
+
     // todo check capacity min
-    swapMatch.matcherChange.capacity += swapSellXform.request.tips
+    if (swapSellXform.capacity < SwapSellTransformation.CKB_FIXED_MIN_CAPACITY) {
+      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash)
+      this.#info(
+        `swapSellXform.capacity ${swapSellXform.capacity}< SwapSellTransformation.CKB_FIXED_MIN_CAPACITY ${SwapSellTransformation.CKB_FIXED_MIN_CAPACITY}`,
+      )
+    }
+
+    matchRecord.matcherChange.capacity += swapSellXform.request.tips
 
     // then all remaining sudtChangeAmount, include of 0.3% as liquidity provider interest, goes into pool
-    swapMatch.info.sudtReserve += swapSellXform.request.sudtAmount
-    swapMatch.info.ckbReserve -= ckbOut
+    matchRecord.info.sudtReserve += swapSellXform.request.sudtAmount
+    matchRecord.info.ckbReserve -= ckbOut
 
-    swapMatch.pool.sudtAmount += swapSellXform.request.sudtAmount
-    swapMatch.pool.capacity -= ckbOut
-  }
-
-  /*
-  Info -> Info
-  Pool -> Pool
-  [removeReq] -> [removeRes(Sudt-cell)]
-  [addReq] -> [addRes(Lpt-cell + Sudt-change-cell)]
-   */
-
-  matchLiquidity = (liquidityMatch: LiquidityMatch): void => {
-    for (let addXform of liquidityMatch.addXforms) {
-      this.processLiquidityAddTransformation(liquidityMatch, addXform)
-    }
-
-    for (let removelXform of liquidityMatch.removeXforms) {
-      this.processLiquidityRemoveTransformation(liquidityMatch, removelXform)
-    }
-
-    if (liquidityMatch.removeXforms.every(xform => xform.skip) && liquidityMatch.addXforms.every(xform => xform.skip)) {
-      liquidityMatch.skip = true
-    } else {
-      liquidityMatch.matcherChange.reduceBlockMinerFee()
-    }
+    matchRecord.pool.sudtAmount += swapSellXform.request.sudtAmount
+    matchRecord.pool.capacity -= ckbOut
   }
 
   /*
@@ -195,15 +195,13 @@ export default class MatcherService {
   LiquidityRemoveReq -> Sudt + Ckb
  */
   private processLiquidityRemoveTransformation = (
-    liquidityMatch: LiquidityMatch,
+    matchRecord: MatchRecord,
     liquidityRemoveXform: LiquidityRemoveTransformation,
   ): void => {
     let withdrawnSudt =
-      (liquidityRemoveXform.request.lptAmount * liquidityMatch.info.sudtReserve) / liquidityMatch.info.totalLiquidity +
-      1n
+      (liquidityRemoveXform.request.lptAmount * matchRecord.info.sudtReserve) / matchRecord.info.totalLiquidity + 1n
     let withdrawnCkb =
-      (liquidityRemoveXform.request.lptAmount * liquidityMatch.info.ckbReserve) / liquidityMatch.info.totalLiquidity +
-      1n
+      (liquidityRemoveXform.request.lptAmount * matchRecord.info.ckbReserve) / matchRecord.info.totalLiquidity + 1n
 
     if (withdrawnSudt < liquidityRemoveXform.request.sudtMin || withdrawnCkb < liquidityRemoveXform.request.ckbMin) {
       this.#info('process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash)
@@ -228,21 +226,21 @@ export default class MatcherService {
       return
     }
 
-    liquidityMatch.matcherChange.capacity += liquidityRemoveXform.request.tips
+    matchRecord.matcherChange.capacity += liquidityRemoveXform.request.tips
 
     liquidityRemoveXform.sudtAmount = withdrawnSudt
     liquidityRemoveXform.capacityAmount =
       liquidityRemoveXform.request.capacityAmount + withdrawnCkb - liquidityRemoveXform.request.tips
 
     // update info
-    liquidityMatch.info.ckbReserve -= withdrawnCkb
-    liquidityMatch.info.sudtReserve -= withdrawnSudt
+    matchRecord.info.ckbReserve -= withdrawnCkb
+    matchRecord.info.sudtReserve -= withdrawnSudt
 
-    liquidityMatch.info.totalLiquidity -= liquidityRemoveXform.request.lptAmount
+    matchRecord.info.totalLiquidity -= liquidityRemoveXform.request.lptAmount
 
     // update pool
-    liquidityMatch.pool.sudtAmount -= withdrawnSudt
-    liquidityMatch.pool.capacity -= withdrawnCkb
+    matchRecord.pool.sudtAmount -= withdrawnSudt
+    matchRecord.pool.capacity -= withdrawnCkb
   }
 
   /*
@@ -256,7 +254,7 @@ export default class MatcherService {
    LiquidityAddReq -> Lpt(size is fixed if script is determined) + change(size is fixed if script is determined)
   */
   private processLiquidityAddTransformation = (
-    liquidityMatch: LiquidityMatch,
+    matchRecord: MatchRecord,
     liquidityAddXform: LiquidityAddTransformation,
   ): void => {
     // first we try to use all available and have to has sudt cell to keep the change
@@ -274,7 +272,7 @@ export default class MatcherService {
       return
     }
 
-    let sudtNeeded = (ckbAvailable * liquidityMatch.info.sudtReserve) / liquidityMatch.info.ckbReserve + 1n
+    let sudtNeeded = (ckbAvailable * matchRecord.info.sudtReserve) / matchRecord.info.ckbReserve + 1n
 
     if (sudtNeeded < liquidityAddXform.request.sudtAmount) {
       if (sudtNeeded < liquidityAddXform.request.sudtMin || ckbAvailable < liquidityAddXform.request.ckbMin) {
@@ -288,9 +286,9 @@ export default class MatcherService {
       }
 
       // OK, we use all ckb we can use and sudt remains
-      let lptGot = (liquidityMatch.info.totalLiquidity * ckbAvailable) / liquidityMatch.info.ckbReserve + 1n
+      let lptGot = (matchRecord.info.totalLiquidity * ckbAvailable) / matchRecord.info.ckbReserve + 1n
 
-      liquidityMatch.matcherChange.capacity += liquidityAddXform.request.tips
+      matchRecord.matcherChange.capacity += liquidityAddXform.request.tips
 
       // of cause, because we drain all available ckbs and only leave these for hold cells
       liquidityAddXform.capacityChangeAmount = Lpt.LPT_FIXED_CAPACITY + Sudt.SUDT_FIXED_CAPACITY
@@ -298,18 +296,18 @@ export default class MatcherService {
       liquidityAddXform.lptAmount = lptGot
 
       // update info
-      liquidityMatch.info.ckbReserve += ckbAvailable
-      liquidityMatch.info.sudtReserve += sudtNeeded
+      matchRecord.info.ckbReserve += ckbAvailable
+      matchRecord.info.sudtReserve += sudtNeeded
 
-      liquidityMatch.info.totalLiquidity += lptGot
+      matchRecord.info.totalLiquidity += lptGot
 
-      liquidityMatch.pool.capacity += ckbAvailable
-      liquidityMatch.pool.sudtAmount += sudtNeeded
+      matchRecord.pool.capacity += ckbAvailable
+      matchRecord.pool.sudtAmount += sudtNeeded
     } else {
       // sudt is not enough, we drain all sudts
 
       let ckbNeeded =
-        (liquidityAddXform.request.sudtAmount * liquidityMatch.info.ckbReserve) / liquidityMatch.info.sudtReserve + 1n
+        (liquidityAddXform.request.sudtAmount * matchRecord.info.ckbReserve) / matchRecord.info.sudtReserve + 1n
 
       if (
         liquidityAddXform.request.sudtAmount < liquidityAddXform.request.sudtMin ||
@@ -334,9 +332,9 @@ export default class MatcherService {
         return
       }
 
-      let lptGot = (liquidityMatch.info.totalLiquidity * sudtNeeded) / liquidityMatch.info.sudtReserve + 1n
+      let lptGot = (matchRecord.info.totalLiquidity * sudtNeeded) / matchRecord.info.sudtReserve + 1n
 
-      liquidityMatch.matcherChange.capacity += liquidityAddXform.request.tips
+      matchRecord.matcherChange.capacity += liquidityAddXform.request.tips
 
       // of cause, because we drain all available ckbs and only leave these for hold cells
       liquidityAddXform.capacityChangeAmount = ckbLeft
@@ -344,19 +342,19 @@ export default class MatcherService {
       liquidityAddXform.lptAmount = lptGot
 
       // update info
-      liquidityMatch.info.ckbReserve += ckbNeeded
-      liquidityMatch.info.sudtReserve += liquidityAddXform.request.sudtAmount
+      matchRecord.info.ckbReserve += ckbNeeded
+      matchRecord.info.sudtReserve += liquidityAddXform.request.sudtAmount
 
-      liquidityMatch.info.totalLiquidity += lptGot
+      matchRecord.info.totalLiquidity += lptGot
 
-      liquidityMatch.pool.capacity += ckbNeeded
-      liquidityMatch.pool.sudtAmount += liquidityAddXform.request.sudtAmount
+      matchRecord.pool.capacity += ckbNeeded
+      matchRecord.pool.sudtAmount += liquidityAddXform.request.sudtAmount
     }
   }
 
   // req -> lpt
-  initLiquidity = (liquidityMatch: LiquidityMatch): void => {
-    let liquidityInitXform = liquidityMatch.initXforms!
+  initLiquidity = (matchRecord: MatchRecord): void => {
+    let liquidityInitXform = matchRecord.initXforms!
 
     let ckbAvailable =
       liquidityInitXform.request.capacityAmount -
@@ -367,15 +365,17 @@ export default class MatcherService {
 
     liquidityInitXform.lptAmount = lptMinted
 
-    liquidityMatch.matcherChange.capacity += liquidityInitXform.request.tips
+    matchRecord.matcherChange.capacity += liquidityInitXform.request.tips
 
     // update info
-    liquidityMatch.info.ckbReserve += ckbAvailable
-    liquidityMatch.info.sudtReserve += liquidityInitXform.request.sudtAmount
+    matchRecord.info.ckbReserve += ckbAvailable
+    matchRecord.info.sudtReserve += liquidityInitXform.request.sudtAmount
 
-    liquidityMatch.info.totalLiquidity += lptMinted
+    matchRecord.info.totalLiquidity += lptMinted
 
-    liquidityMatch.pool.capacity += ckbAvailable
-    liquidityMatch.pool.sudtAmount += liquidityInitXform.request.sudtAmount
+    matchRecord.pool.capacity += ckbAvailable
+    matchRecord.pool.sudtAmount += liquidityInitXform.request.sudtAmount
+
+    matchRecord.matcherChange.reduceBlockMinerFee()
   }
 }
