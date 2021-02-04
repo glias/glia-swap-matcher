@@ -7,6 +7,7 @@ ADD ormconfig.yml.example ./ormconfig.yml
 ADD yarn.lock .
 ADD tsconfig.json .
 ADD src ./src
+ADD configs ./configs
 
 RUN yarn install
 RUN yarn build
