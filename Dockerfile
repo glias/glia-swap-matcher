@@ -14,4 +14,4 @@ RUN yarn build
 
 EXPOSE 8080
 
-CMD [ "npm", "run", "start:glia:prod" ]
+CMD [ "npm", "run", "start:glia:dev" ]
