@@ -42,7 +42,7 @@ export class Deal {
   @Column('varchar', { name: 'matcherChange' })
   matcherChange!: string
 
-  //处理了哪些req,[xxxx-x,xxxx-x,xxxx-x]
+  //处理了哪些req,[0x????-0x??,0x????-0x??,0x????-0x??]
   @Column('varchar', { name: 'req_outpoint' })
   reqOutpoints!: string
 

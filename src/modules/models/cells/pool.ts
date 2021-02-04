@@ -22,6 +22,7 @@ export class Pool implements CellInputType, CellOutputType {
   capacity: bigint
   sudtAmount: bigint
 
+  // for debug
   readonly capacityOriginal: bigint
   readonly sudtReserveOriginal: bigint
 

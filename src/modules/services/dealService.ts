@@ -3,6 +3,7 @@ import { getConnection, In } from 'typeorm'
 import DealRepository from '../repositories/deal.repository'
 import { Deal, DealStatus } from '../models/entities/deal.entity'
 import { NODE_ENV } from '../../utils/envs'
+import { logger } from '../../utils/logger'
 
 @injectable()
 export default class DealService {
@@ -10,6 +11,18 @@ export default class DealService {
 
   constructor() {
     this.#dealRepository = getConnection(NODE_ENV).getCustomRepository(DealRepository)
+  }
+
+  #error = (msg: string) => {
+    logger.error(`DealService: ${msg}`)
+  }
+
+  clearDb = async (): Promise<void> =>{
+    if(NODE_ENV !== 'test'){
+      this.#error('clearDb is forbidden for not test environment')
+      return
+    }
+    await this.#dealRepository.clear()
   }
 
   getAllSentDeals = async (): Promise<Array<Deal>> => {

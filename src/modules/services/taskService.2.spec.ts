@@ -7,7 +7,7 @@ import { SwapSellTransformation } from '../models/transformation/swapSellTransfo
 import { Info } from '../models/cells/info'
 import { Pool } from '../models/cells/pool'
 import { MatcherChange } from '../models/cells/matcherChange'
-import { Deal, DealStatus } from '../models/entities/deal.entity'
+import {  DealStatus } from '../models/entities/deal.entity'
 import winston, { format, transports } from 'winston'
 
 import ScanService from './scanService'
@@ -19,6 +19,9 @@ import TransactionService from './transactionService'
 import { defaultOutPoint, defaultScript } from '../../utils/tools'
 import JSONbig from 'json-bigint'
 import { LiquidityAddReq } from '../models/cells/liquidityAddReq'
+import { createConnection } from 'typeorm'
+import { NODE_ENV } from '../../utils/envs'
+import { logger } from '../../utils/logger'
 
 jest.setMock('../../utils/logger', {
   logger: winston.createLogger({
@@ -45,26 +48,6 @@ class MockScanService {
   getTip = jest.fn().mockResolvedValue(1n)
 }
 
-// mocked services
-
-let getAllSentDealsReturn: Array<Deal>
-let getByTxHashReturn: Deal | null
-
-@injectable()
-class MockDealService {
-  getAllSentDeals = jest.fn().mockImplementation(() => {
-    return Promise.resolve(getAllSentDealsReturn)
-  })
-  getByPreTxHash = jest.fn().mockResolvedValue(null)
-  getByTxHash = jest.fn().mockImplementation(() => {
-    return Promise.resolve(getByTxHashReturn)
-  })
-  saveDeal = jest.fn().mockResolvedValue(null)
-  updateDealStatus = jest.fn().mockResolvedValue(undefined)
-  updateDealsStatus = jest.fn().mockResolvedValue(undefined)
-  updateDealTxsChainsToCommited = jest.fn().mockResolvedValue(undefined)
-}
-
 let getTxsStatusReturn: Array<[string, Omit<DealStatus, DealStatus.Sent>]>
 
 @injectable()
@@ -80,7 +63,7 @@ class MockRpcService {
   })
 }
 
-//let matchSwapReturn: SwapMatch
+/*//let matchSwapReturn: SwapMatch
 //let matchLiquidityReturn: MatchRecord
 @injectable()
 class MockMatcherService {
@@ -95,9 +78,9 @@ class MockMatcherService {
   initLiquidity = jest.fn().mockImplementation(() => {
     return null
   })
-}
+}*/
 
-@injectable()
+/*@injectable()
 class MockTransactionService {
   // @ts-ignore
   composeLiquidityInitTransaction = jest.fn().mockImplementation(() => {
@@ -107,12 +90,12 @@ class MockTransactionService {
   composeTransaction = jest.fn().mockImplementation(() => {
     return null
   })
-}
+}*/
 
 describe('Test tasks module', () => {
   let taskService: TaskService
   let mockScanService: MockScanService
-  // let mockDealService: MockDealService
+  let dealService: DealService
   // let mockRpcService: MockRpcService
   // let mockMatcherService: MockMatcherService
   //let spyTransactionService: TransactionService
@@ -122,6 +105,10 @@ describe('Test tasks module', () => {
   let signWitness
   let handlerInit
   beforeAll(async () => {
+
+    const connection = await createConnection(NODE_ENV)
+    logger.debug(`database connected to ${connection.name}`)
+
     modules[ScanService.name] = Symbol(ScanService.name)
     modules[DealService.name] = Symbol(DealService.name)
     modules[RpcService.name] = Symbol(RpcService.name)
@@ -129,20 +116,22 @@ describe('Test tasks module', () => {
     modules[TransactionService.name] = Symbol(TransactionService.name)
     modules[TaskService.name] = Symbol(TaskService.name)
     container.bind(modules[ScanService.name]).to(MockScanService)
-    container.bind(modules[DealService.name]).to(MockDealService)
+    container.bind(modules[DealService.name]).to(DealService)
     container.bind(modules[RpcService.name]).to(MockRpcService)
-    container.bind(modules[MatcherService.name]).to(MockMatcherService)
-    container.bind(modules[TransactionService.name]).to(MockTransactionService)
+    container.bind(modules[MatcherService.name]).to(MatcherService)
+    container.bind(modules[TransactionService.name]).to(TransactionService)
     container.bind(modules[TaskService.name]).to(TaskService)
 
     taskService = container.get(modules[TaskService.name])
     mockScanService = container.get(modules[ScanService.name])
-    // mockDealService = container.get(modules[DealService.name])
+    dealService = container.get(modules[DealService.name])
     // mockRpcService = container.get(modules[RpcService.name])
     // mockMatcherService = container.get(modules[MatcherService.name])
     // mockTransactionService = container.get(modules[TransactionService.name])
 
     handlerInit = jest.spyOn(taskService, 'handlerInit')
+
+    await dealService.clearDb()
   })
 
   beforeEach(() => {
@@ -150,17 +139,7 @@ describe('Test tasks module', () => {
   })
 
   it('init liquidity, no liquidity add xforms', async () => {
-    scanAllReturn = [[], [], [], [], Info.default(), Pool.default(), MatcherChange.default()]
-    getByTxHashReturn = null
-    getAllSentDealsReturn = []
-
-    await taskService.task()
-
-    expect(handlerInit).toHaveBeenCalled()
-  })
-
-  it('init liquidity, liquidity add xforms', async () => {
-    scanAllReturn = [
+    scanAllReturn =[
       [
         new LiquidityAddTransformation(
           new LiquidityAddReq(
@@ -174,25 +153,106 @@ describe('Test tasks module', () => {
             BigInt(0 * 10 ** 8),
             BigInt(0 * 10 ** 8),
             defaultScript,
-            defaultOutPoint,
+            {
+              tx_hash: '0x3333333333333333333333333333333333333333333333333333333333333300',
+              index: '0x1',
+            },
           ),
         ),
       ],
       [],
       [],
       [],
-      Info.default(),
-      Pool.default(),
+      new Info(Info.INFO_FIXED_CAPACITY,
+        BigInt(100 * 10 ** 8),
+        BigInt(100 * 10 ** 8),
+        BigInt(100 * 10 ** 8),
+        {
+          tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111100',
+          index: '0x0',
+        }
+      ),
+      new Pool(Pool.POOL_FIXED_CAPACITY + BigInt(100 * 10 ** 8),
+        BigInt(100 * 10 ** 8),
+        {
+          tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111100',
+          index: '0x1',
+        }
+      ),
       MatcherChange.default(),
     ]
 
-    getByTxHashReturn = null
-    getAllSentDealsReturn = []
+    await taskService.task()
+    // tx 0x189007b340c557699fa2fc5c7ed5d7cb46553bb8a79e1a22ff4e42198e9bf4da is sent
+    expect(handlerInit).toHaveBeenCalled()
+  })
+  it('one is pending and get one more', async () => {
+
+    let deal = await dealService.getAllSentDeals()!
+
+    scanAllReturn =[
+      [
+        new LiquidityAddTransformation(
+          new LiquidityAddReq(
+            BigInt(100 * 10 ** 8) + LiquidityAddReq.LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY,
+            BigInt(100 * 10 ** 8),
+            '0000000000000000000000000000000000000000000000000000000000000000',
+            '01',
+            BigInt(0 * 10 ** 8),
+            BigInt(0 * 10 ** 8),
+            '0000000000000000000000000000000000000000000000000000000000000000',
+            BigInt(0 * 10 ** 8),
+            BigInt(0 * 10 ** 8),
+            defaultScript,
+            {
+              tx_hash: '0x3333333333333333333333333333333333333333333333333333333333333300',
+              index: '0x1',
+            },
+          ),
+        ),
+        new LiquidityAddTransformation(
+          new LiquidityAddReq(
+            BigInt(100 * 10 ** 8) + LiquidityAddReq.LIQUIDITY_REMOVE_REQUEST_FIXED_CAPACITY,
+            BigInt(100 * 10 ** 8),
+            '0000000000000000000000000000000000000000000000000000000000000000',
+            '01',
+            BigInt(0 * 10 ** 8),
+            BigInt(0 * 10 ** 8),
+            '0000000000000000000000000000000000000000000000000000000000000000',
+            BigInt(0 * 10 ** 8),
+            BigInt(0 * 10 ** 8),
+            defaultScript,
+            {
+              tx_hash: '0x3333333333333333333333333333333333333333333333333333333333333301',
+              index: '0x1',
+            },
+          ),
+        ),
+      ],
+      [],
+      [],
+      [],
+      new Info(Info.INFO_FIXED_CAPACITY,
+        BigInt(100 * 10 ** 8),
+        BigInt(100 * 10 ** 8),
+        BigInt(100 * 10 ** 8),
+        {
+          tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111100',
+          index: '0x0',
+        }
+      ),
+      new Pool(Pool.POOL_FIXED_CAPACITY + BigInt(100 * 10 ** 8),
+        BigInt(100 * 10 ** 8),
+        {
+          tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111100',
+          index: '0x1',
+        }
+      ),
+      MatcherChange.default(),
+    ]
 
     await taskService.task()
 
-    expect(handlerInit).toHaveBeenCalled()
-
-    console.log(JSONbig.stringify(handlerInit.mock.calls[0][0]))
   })
+
 })

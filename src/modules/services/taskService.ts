@@ -253,6 +253,20 @@ export default class TaskService {
     this.#matcherService.initLiquidity(matchRecord)
 
     this.#transactionService.composeLiquidityInitTransaction(matchRecord)
+
+    // @ts-ignore
+    const deal: Omit<Deal, 'createdAt' | 'id'> = {
+      txHash: matchRecord.composedTxHash!,
+      preTxHash: matchRecord.info.outPoint.tx_hash,
+      tx: JSONbig.stringify(matchRecord.composedTx),
+      info: JSONbig.stringify(matchRecord.info),
+      pool: JSONbig.stringify(matchRecord.pool),
+      matcherChange: JSONbig.stringify(matchRecord.matcherChange),
+      reqOutpoints: matchRecord.initXforms.request.getOutPoint(),
+      status: DealStatus.Sent,
+    }
+    //await this.#dealService.saveDeal(deal)
+
     await this.#rpcService.sendTransaction(matchRecord.composedTx!)
   }
 }

@@ -1,17 +1,15 @@
 import { injectable } from 'inversify'
 import Rpc from '@nervosnetwork/ckb-sdk-rpc'
-import { CKB_NODE_URL } from '../../utils/envs'
+import { CKB_NODE_URL, PW_LOCK_CODE_HASH, PW_LOCK_HASH_TYPE } from '../../utils/envs'
 import { DealStatus } from '../models/entities/deal.entity'
 import { OutPoint } from '@ckb-lumos/base'
 import { scriptToHash } from '@nervosnetwork/ckb-sdk-utils'
 import JSONbig from 'json-bigint'
 import { logger } from '../../utils/logger'
 import { prepare0xPrefix, remove0xPrefix } from '../../utils/tools'
-import { Script, WitnessArgs } from '../../utils/blockchain'
+import { WitnessArgs } from '../../utils/blockchain'
 import { ETHSPVProof, MintTokenWitness } from '../../utils/witness'
 import * as rlp from 'rlp'
-
-const abiCoder = require('web3-eth-abi')
 
 @injectable()
 export default class RpcService {
@@ -78,11 +76,17 @@ export default class RpcService {
     try {
       const witness = tx.transaction.witnesses[0]
       const lock = this.parseWitness(witness)
+
+      console.log(JSONbig.stringify(lock))
+      console.log(scriptToHash(lock))
+      console.log(lockScriptHash)
       if (scriptToHash(lock).toLowerCase() === lockScriptHash.toLowerCase()) {
         this.#info(`find script of tx ${lockScriptHash} from witness`)
         return lock
       }
-    } catch (e) {}
+    } catch (e) {
+      this.#info(e)
+    }
     this.#info(`script of tx ${lockScriptHash} is missing`)
     return null
   }
@@ -110,14 +114,21 @@ export default class RpcService {
       /// address
       pub address: Address,
       /// topics
-      pub topics: Vec<H256>,
+      pub topics: Vec<H256>, 105~125
       /// data
       pub data: Vec<u8>,
     }
      */
     // @ts-ignore
-    const logEntry: Array<Buffer> = rlp.decode(toBuffer(logEntryData))
+    const logEntry: Array<Buffer> = rlp.decode(this.toBuffer(logEntryData))
     //console.log(logEntry)
+
+    // @ts-ignore
+    const sender : Buffer = logEntry[1][2]
+
+    const senderEthAddress = prepare0xPrefix(sender.toString('hex').substring(24))
+
+    console.log(senderEthAddress)
 
     /*
     pub struct ETHLockEvent {
@@ -140,7 +151,7 @@ export default class RpcService {
       bytes sudtExtraData
     );
      */
-    const dataBuffer: Buffer = logEntry[2]
+    /*const dataBuffer: Buffer = logEntry[2]
     //console.log(dataBuffer.toString('hex'))
 
     let event = abiCoder.decodeLog(
@@ -184,11 +195,11 @@ export default class RpcService {
     ///console.log('codeHash: '+this.toBuffer(codeHash).toString('hex'))
     ///console.log('hashType: '+hashType.toString(16))
     ///console.log('args: '+this.toBuffer(args).toString('hex'))
-
+    */
     return {
-      args: prepare0xPrefix(this.toBuffer(args).toString('hex')),
-      codeHash: prepare0xPrefix(this.toBuffer(codeHash).toString('hex')),
-      hashType: hashType === 0 ? 'data' : 'type',
+      args: senderEthAddress,
+      codeHash: PW_LOCK_CODE_HASH,
+      hashType: PW_LOCK_HASH_TYPE,
     }
   }
 
@@ -211,7 +222,7 @@ export default class RpcService {
   }
 
   private toBuffer = (arrayBuffer: ArrayBuffer): Buffer => {
-    let b = new Buffer(arrayBuffer.byteLength)
+    let b = Buffer.alloc(arrayBuffer.byteLength)
     let view = new Uint8Array(arrayBuffer)
 
     for (let i = 0; i < b.length; ++i) {

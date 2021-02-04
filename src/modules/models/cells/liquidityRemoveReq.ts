@@ -8,7 +8,7 @@ import {
   prepare0xPrefix,
   scriptHash,
 } from '../../../utils/tools'
-import { LPT_TYPE_CODE_HASH } from '../../../utils/envs'
+import { LPT_TYPE_SCRIPT_HASH } from '../../../utils/envs'
 import { CellInputType } from './interfaces/CellInputType'
 
 /*
@@ -129,7 +129,7 @@ export class LiquidityRemoveReq implements CellInputType {
   }
 
   static validate(cell: Cell) {
-    if (scriptHash(cell.cell_output.type!) !== LPT_TYPE_CODE_HASH) {
+    if (scriptHash(cell.cell_output.type!).toLowerCase() !== LPT_TYPE_SCRIPT_HASH.toLowerCase()) {
       return false
     }
     if (BigInt(cell.cell_output.capacity) !== LiquidityRemoveReq.LIQUIDITY_ADD_REQUEST_FIXED_CAPACITY) {

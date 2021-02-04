@@ -369,6 +369,10 @@ export const SECP256K1_CODE_HASH = '0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b
 export const SECP256K1_HASH_TYPE = 'type'
 
 // matcher change, ckb
+export const PW_LOCK_CODE_HASH = process.env.PW_LOCK_CODE_HASH!
+export const PW_LOCK_HASH_TYPE: HashType = process.env.PW_LOCK_HASH_TYPE === 'type' ? 'type' : 'data'
+
+// matcher change, ckb
 export const MATCHER_PRIVATE_KEY = process.env.MATCHER_PRIVATE_KEY!
 export const MATCHER_ADDRESS = `0x${blake160(privateKeyToPublicKey(MATCHER_PRIVATE_KEY), 'hex')}`
 log(`Secp256k1 args: MATCHER_PUBLIC_KEY_HASH:${MATCHER_ADDRESS}`)
