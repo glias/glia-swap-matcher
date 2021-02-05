@@ -1,13 +1,9 @@
 import { injectable } from 'inversify'
-import { Sudt } from '../models/cells/sudt'
-import { Ckb } from '../models/cells/ckb'
 import { LiquidityRemoveTransformation } from '../models/transformation/liquidityRemoveTransformation'
 import { LiquidityAddTransformation } from '../models/transformation/liquidityAddTransformation'
 import { SwapBuyTransformation } from '../models/transformation/swapBuyTransformation'
-import { Lpt } from '../models/cells/lpt'
 import { MatchRecord } from '../models/matches/matchRecord'
 import { SwapSellTransformation } from '../models/transformation/swapSellTransformation'
-import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
 // @ts-ignore
 import sqrt from 'bigint-isqrt'
 import { logger } from '../../utils/logger'
@@ -23,7 +19,8 @@ export default class MatcherService {
     logger.error(`MatcherService: ${msg}`)
   }
 
-  constructor() {}
+  constructor() {
+  }
 
   /*
   Info -> Info
@@ -75,10 +72,9 @@ export default class MatcherService {
     // ckb -> sudt
 
     // since you can not spend all ckb because we need some to hold the output sudt cell
-    if (swapBuyXform.request.capacity - swapBuyXform.request.tips <= SwapBuyTransformation.SUDT_FIXED_CAPACITY) {
-      this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash)
-      this.#info(
-        `swapBuyXform.request.capacity ${swapBuyXform.request.capacity} - swapBuyXform.request.tips ${swapBuyXform.request.tips} <= SwapBuyTransformation.SUDT_FIXED_CAPACITY ${SwapBuyTransformation.SUDT_FIXED_CAPACITY}`,
+    if (swapBuyXform.request.capacity - swapBuyXform.request.tips <= swapBuyXform.minCapacity()) {
+      this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash +
+        ` swapBuyXform.request.capacity ${swapBuyXform.request.capacity} - swapBuyXform.request.tips ${swapBuyXform.request.tips} <= swapBuyXform.minCapacity() ${swapBuyXform.minCapacity()}`,
       )
 
       swapBuyXform.skip = true
@@ -93,14 +89,14 @@ export default class MatcherService {
     // spent_ckb * 997 * sudt_reserve <= (ckb_reserve * 1000 + spent_ckb * 997 )* sudt_got
     // sudt_got >= spent_ckb * 997 * sudt_reserve / (ckb_reserve * 1000 + spent_ckb * 997 )
 
-    let ckbIn = swapBuyXform.request.capacity - swapBuyXform.request.tips - SwapBuyTransformation.SUDT_FIXED_CAPACITY
+    let ckbIn = swapBuyXform.request.capacity - swapBuyXform.request.tips - swapBuyXform.minCapacity()
 
     let sudtGot =
       (ckbIn * 997n * matchRecord.info.sudtReserve) / (matchRecord.info.ckbReserve * 1000n + ckbIn * 997n) + 1n
 
     if (sudtGot < swapBuyXform.request.amountOutMin) {
-      this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash)
-      this.#info(`sudtGot ${sudtGot}< swapBuyXform.request.amountOutMin ${swapBuyXform.request.amountOutMin}`)
+      this.#info('process swap buy, txHash: ' + swapBuyXform.request.outPoint.tx_hash +
+        ` sudtGot ${sudtGot}< swapBuyXform.request.amountOutMin ${swapBuyXform.request.amountOutMin}`)
 
       swapBuyXform.skip = true
       return
@@ -143,12 +139,12 @@ export default class MatcherService {
 
     let ckbOut: bigint =
       (swapSellXform.request.sudtAmount * 997n * matchRecord.info.ckbReserve) /
-        (matchRecord.info.sudtReserve * 1000n + swapSellXform.request.sudtAmount * 997n) +
+      (matchRecord.info.sudtReserve * 1000n + swapSellXform.request.sudtAmount * 997n) +
       1n
 
     if (ckbOut < swapSellXform.request.amountOutMin) {
-      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash)
-      this.#info(`ckbOut ${ckbOut} < swapSellXform.request.amountOutMin ${swapSellXform.request.amountOutMin}`)
+      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash +
+        ` ckbOut ${ckbOut} < swapSellXform.request.amountOutMin ${swapSellXform.request.amountOutMin}`)
 
       swapSellXform.skip = true
       return
@@ -156,11 +152,11 @@ export default class MatcherService {
 
     if (
       ckbOut + swapSellXform.request.capacity <
-      SwapSellTransformation.CKB_FIXED_MIN_CAPACITY + swapSellXform.request.tips
+      swapSellXform.minCapacity() + swapSellXform.request.tips
     ) {
-      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash)
       this.#info(
-        `ckbOut ${ckbOut} + swapSellXform.request.capacity ${swapSellXform.request.capacity}< SwapSellTransformation.CKB_FIXED_MIN_CAPACITY ${SwapSellTransformation.CKB_FIXED_MIN_CAPACITY} + swapSellXform.request.tips ${swapSellXform.request.tips}`,
+        'process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash +
+        ` ckbOut ${ckbOut} + swapSellXform.request.capacity ${swapSellXform.request.capacity}<  swapSellXform.minCapacity() ${swapSellXform.minCapacity()} + swapSellXform.request.tips ${swapSellXform.request.tips}`,
       )
 
       swapSellXform.skip = true
@@ -169,11 +165,10 @@ export default class MatcherService {
 
     swapSellXform.capacity = ckbOut + swapSellXform.request.capacity - swapSellXform.request.tips
 
-    // todo check capacity min
-    if (swapSellXform.capacity < SwapSellTransformation.CKB_FIXED_MIN_CAPACITY) {
-      this.#info('process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash)
+    if (swapSellXform.capacity < swapSellXform.minCapacity()) {
       this.#info(
-        `swapSellXform.capacity ${swapSellXform.capacity}< SwapSellTransformation.CKB_FIXED_MIN_CAPACITY ${SwapSellTransformation.CKB_FIXED_MIN_CAPACITY}`,
+        'process swap sell, txHash: ' + swapSellXform.request.outPoint.tx_hash +
+        ` swapSellXform.capacity ${swapSellXform.capacity}< swapSellXform.minCapacity() ${swapSellXform.minCapacity()}`,
       )
     }
 
@@ -204,8 +199,8 @@ export default class MatcherService {
       (liquidityRemoveXform.request.lptAmount * matchRecord.info.ckbReserve) / matchRecord.info.totalLiquidity + 1n
 
     if (withdrawnSudt < liquidityRemoveXform.request.sudtMin || withdrawnCkb < liquidityRemoveXform.request.ckbMin) {
-      this.#info('process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash)
       this.#info(
+        'process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash +
         `withdrawnSudt ${withdrawnSudt}< liquidityRemoveXform.request.sudtMin ${liquidityRemoveXform.request.sudtMin} || withdrawnCkb ${withdrawnCkb}< liquidityRemoveXform.request.ckbMin ${liquidityRemoveXform.request.ckbMin}`,
       )
 
@@ -215,11 +210,10 @@ export default class MatcherService {
 
     if (
       liquidityRemoveXform.request.capacityAmount + withdrawnCkb <
-      LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY + liquidityRemoveXform.request.tips
+      liquidityRemoveXform.minCapacity() + liquidityRemoveXform.request.tips
     ) {
-      this.#info('process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash)
-      this.#info(
-        `liquidityRemoveXform.request.capacityAmount ${liquidityRemoveXform.request.capacityAmount} + withdrawnCkb ${withdrawnCkb} < LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY ${LiquidityRemoveTransformation.REMOVE_XFORM_FIXED_MIN_CAPACITY} + liquidityRemoveXform.request.tips ${liquidityRemoveXform.request.tips}`,
+      this.#info('process liquidity remove, txHash: ' + liquidityRemoveXform.request.outPoint.tx_hash +
+        ` liquidityRemoveXform.request.capacityAmount ${liquidityRemoveXform.request.capacityAmount} + withdrawnCkb ${withdrawnCkb} < liquidityRemoveXform.minCapacity() ${liquidityRemoveXform.minCapacity()} + liquidityRemoveXform.request.tips ${liquidityRemoveXform.request.tips}`,
       )
 
       liquidityRemoveXform.skip = true
@@ -261,12 +255,11 @@ export default class MatcherService {
     let ckbAvailable =
       liquidityAddXform.request.capacityAmount -
       liquidityAddXform.request.tips -
-      Lpt.LPT_FIXED_CAPACITY -
-      Sudt.SUDT_FIXED_CAPACITY
+      liquidityAddXform.minCapacityForSudtChange()
 
     if (ckbAvailable <= 0n) {
-      this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
-      this.#info(`ckbAvailable ${ckbAvailable} <= 0n}`)
+      this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash +
+        ` ckbAvailable ${ckbAvailable} <= 0n}`)
 
       liquidityAddXform.skip = true
       return
@@ -275,10 +268,10 @@ export default class MatcherService {
     let sudtNeeded = (ckbAvailable * matchRecord.info.sudtReserve) / matchRecord.info.ckbReserve + 1n
 
     if (sudtNeeded < liquidityAddXform.request.sudtAmount) {
+      // exhaust all available ckb and sudt remains
       if (sudtNeeded < liquidityAddXform.request.sudtMin || ckbAvailable < liquidityAddXform.request.ckbMin) {
-        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
-        this.#info(
-          `sudtNeeded ${sudtNeeded} < liquidityAddXform.request.sudtMin ${liquidityAddXform.request.sudtMin}|| ckbAvailable ${ckbAvailable}< liquidityAddXform.request.ckbMin ${liquidityAddXform.request.ckbMin}`,
+        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash +
+          ` sudtNeeded ${sudtNeeded} < liquidityAddXform.request.sudtMin ${liquidityAddXform.request.sudtMin}|| ckbAvailable ${ckbAvailable}< liquidityAddXform.request.ckbMin ${liquidityAddXform.request.ckbMin}`,
         )
 
         liquidityAddXform.skip = true
@@ -291,7 +284,7 @@ export default class MatcherService {
       matchRecord.matcherChange.capacity += liquidityAddXform.request.tips
 
       // of cause, because we drain all available ckbs and only leave these for hold cells
-      liquidityAddXform.capacityChangeAmount = Lpt.LPT_FIXED_CAPACITY + Sudt.SUDT_FIXED_CAPACITY
+      liquidityAddXform.capacityChangeAmount = liquidityAddXform.minCapacityForSudtChange()
       liquidityAddXform.sudtChangeAmount = liquidityAddXform.request.sudtAmount - sudtNeeded
       liquidityAddXform.lptAmount = lptGot
 
@@ -313,9 +306,8 @@ export default class MatcherService {
         liquidityAddXform.request.sudtAmount < liquidityAddXform.request.sudtMin ||
         ckbNeeded < liquidityAddXform.request.ckbMin
       ) {
-        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
-        this.#info(
-          `liquidityAddXform.request.sudtAmount ${liquidityAddXform.request.sudtAmount} < liquidityAddXform.request.sudtMin ${liquidityAddXform.request.sudtMin}|| ckbNeeded ${ckbNeeded}< liquidityAddXform.request.ckbMin ${liquidityAddXform.request.ckbMin}`,
+        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash +
+          ` liquidityAddXform.request.sudtAmount ${liquidityAddXform.request.sudtAmount} < liquidityAddXform.request.sudtMin ${liquidityAddXform.request.sudtMin}|| ckbNeeded ${ckbNeeded}< liquidityAddXform.request.ckbMin ${liquidityAddXform.request.ckbMin}`,
         )
 
         liquidityAddXform.skip = true
@@ -323,10 +315,12 @@ export default class MatcherService {
       }
 
       const ckbLeft = liquidityAddXform.request.capacityAmount - liquidityAddXform.request.tips - ckbNeeded
-      if (ckbLeft < Ckb.CKB_FIXED_MIN_CAPACITY + Lpt.LPT_FIXED_CAPACITY) {
+
+      // remaining ckbs should be enough to compose lpt cell and ckb cell
+      if (ckbLeft < liquidityAddXform.minCapacityForCkbChange()) {
         // this shouldn't happens
-        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash)
-        this.#info(`ckbLeft ${ckbLeft}< Ckb.CKB_FIXED_MIN_CAPACITY + Lpt.LPT_FIXED_CAPACITY`)
+        this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash +
+          ` ckbLeft ${ckbLeft}< Ckb.CKB_FIXED_MIN_CAPACITY + Lpt.LPT_FIXED_CAPACITY`)
 
         liquidityAddXform.skip = true
         return
@@ -359,7 +353,7 @@ export default class MatcherService {
     let ckbAvailable =
       liquidityInitXform.request.capacityAmount -
       liquidityInitXform.request.tips -
-      LiquidityInitTransformation.LPT_FIXED_CAPACITY
+      liquidityInitXform.minCapacity()
 
     let lptMinted = sqrt(ckbAvailable * liquidityInitXform.request.sudtAmount)
 

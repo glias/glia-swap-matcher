@@ -16,7 +16,6 @@ import {
 } from '../../../utils/envs'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
-import JSONbig from 'json-bigint'
 /*
 define INFO_TYPE_CODE_HASH
 define INFO_LOCK_CODE_HASH
@@ -115,12 +114,12 @@ export class Info implements CellInputType, CellOutputType {
     return new Info(0n, 0n, 0n, 0n, defaultOutPoint)
   }
 
-  static cloneWith(info: Info, txHash: string, index: string): Info {
+  /*static cloneWith(info: Info, txHash: string, index: string): Info {
     info = JSONbig.parse(JSONbig.stringify(info))
     info.outPoint.tx_hash = txHash
     info.outPoint.index = index
     return info
-  }
+  }*/
 
   toCellInput(): CKBComponents.CellInput {
     return {
@@ -148,5 +147,9 @@ export class Info implements CellInputType, CellOutputType {
 
   getOutPoint(): string {
     return `${this.outPoint.tx_hash}-${this.outPoint.index}`
+  }
+
+  static fromJSON(source: Object): Info {
+    return Object.assign(Info.default(), source);
   }
 }

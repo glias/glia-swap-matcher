@@ -1,10 +1,8 @@
-import type { Cell } from '@ckb-lumos/base'
 import { SwapBuyReq } from '../cells/swapBuyReq'
 import { Sudt } from '../cells/sudt'
 import { Transformation } from './interfaces/transformation'
 
 export class SwapBuyTransformation implements Transformation {
-  public static SUDT_FIXED_CAPACITY = Sudt.SUDT_FIXED_CAPACITY
 
   // capacity should be SUDT's capacity
   sudtAmount: bigint
@@ -22,8 +20,8 @@ export class SwapBuyTransformation implements Transformation {
     this.skip = false
   }
 
-  static validate(_cell: Cell) {
-    return true
+  public minCapacity():bigint{
+    return Sudt.calcMinCapacity(this.request.originalUserLock)
   }
 
   process(): void {

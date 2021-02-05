@@ -1,15 +1,15 @@
 /*
 though a cell only carries ckb is a universal cell, we give it a class
 capacity 8 bytes
-lock script 65 scripts
+lock script 53 scripts 1 + 32 + 20
 type null
 data null
 */
 import { CellOutputType } from './interfaces/CellOutputType'
-import { defaultScript, Uint64BigIntToHex } from '../../../utils/tools'
+import { calcScriptLength, defaultScript, Uint64BigIntToHex } from '../../../utils/tools'
 
 export class Ckb implements CellOutputType {
-  static CKB_FIXED_MIN_CAPACITY = BigInt(73 * 10 ** 8)
+  static CKB_FIXED_BASE_CAPACITY = BigInt(8 * 10 ** 8)
 
   // the capacity, which is all the ckb_amount this cell holds
   capacity: bigint = 0n
@@ -26,6 +26,11 @@ export class Ckb implements CellOutputType {
 
   static default(): Ckb {
     return new Ckb(0n, defaultScript)
+  }
+
+
+  static calcMinCapacity(script : CKBComponents.Script):bigint{
+    return Ckb.CKB_FIXED_BASE_CAPACITY + calcScriptLength(script)
   }
 
   toCellOutput(): CKBComponents.CellOutput {

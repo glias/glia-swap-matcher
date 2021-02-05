@@ -1,3 +1,7 @@
+import { Transformation } from './interfaces/transformation'
+import { LiquidityAddReq } from '../cells/liquidityAddReq'
+import { Lpt } from '../cells/lpt'
+
 /*
 this res contains 2 cell
 1. liquidity cell which contains liquidity
@@ -10,13 +14,7 @@ pool_in_cell                            pool_out_cell
 matcher_in_cell(ckb)                    matcher_out_cell(ckb)
 [init_liquidity_cell]                  [lpt_cell]
  */
-
-import { Transformation } from './interfaces/transformation'
-import { LiquidityAddReq } from '../cells/liquidityAddReq'
-import { Lpt } from '../cells/lpt'
-
 export class LiquidityInitTransformation implements Transformation {
-  public static LPT_FIXED_CAPACITY = Lpt.LPT_FIXED_CAPACITY
 
   lptAmount: bigint
 
@@ -30,6 +28,10 @@ export class LiquidityInitTransformation implements Transformation {
     this.lptAmount = 0n
     this.processed = false
     this.skip = false
+  }
+
+  public minCapacity():bigint{
+    return Lpt.calcMinCapacity(this.request.originalUserLock)
   }
 
   process(): void {

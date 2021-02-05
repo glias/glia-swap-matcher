@@ -115,3 +115,7 @@ export const defaultScript: CKBComponents.Script = {
   codeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
   hashType: 'data',
 }
+
+export function calcScriptLength(script: CKBComponents.Script) : bigint {
+  return BigInt((remove0xPrefix(script.args).length/2 +33 )* 10 ** 8)
+}

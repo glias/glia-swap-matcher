@@ -1,9 +1,7 @@
-import { injectable } from 'inversify'
 import { EntityRepository, Repository } from 'typeorm'
 import { Deal, DealStatus } from '../models/entities/deal.entity'
 import { logger } from '../../utils/logger'
 
-@injectable()
 @EntityRepository(Deal)
 class DealRepository extends Repository<Deal> {
   // @ts-ignore
@@ -24,16 +22,11 @@ class DealRepository extends Repository<Deal> {
   }
 
   getByTxHahs = async (txHash: string): Promise<Deal | null> => {
-    const ret = await this.findOne({
+    return (await this.findOne({
       where: {
         txHash: txHash,
       },
-    })
-
-    if (ret === undefined) {
-      return null
-    }
-    return ret
+    }) || null)
   }
 
   getByPreTxHahs = async (preTxHash: string): Promise<Deal | null> => {
@@ -49,16 +42,15 @@ class DealRepository extends Repository<Deal> {
   getAllSentDeals = async (): Promise<Array<Deal>> => {
 
 
-      const ret = await this.find({
-        where: {
-          status: DealStatus.Sent,
-        },
-        order: {
-          id: 'ASC',
-        },
-      })
+    return await this.find({
+      where: {
+        status: DealStatus.Sent,
+      },
+      order: {
+        id: 'ASC',
+      },
+    })
 
-    return ret
   }
 }
 

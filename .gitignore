@@ -196,3 +196,5 @@ package-lock.json
 db
 
 configs
+
+migrations

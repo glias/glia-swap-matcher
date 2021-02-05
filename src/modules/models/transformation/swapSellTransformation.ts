@@ -1,10 +1,8 @@
-import type { Cell } from '@ckb-lumos/base'
 import { Ckb } from '../cells/ckb'
 import { SwapSellReq } from '../cells/swapSellReq'
 import { Transformation } from './interfaces/transformation'
 
 export class SwapSellTransformation implements Transformation {
-  public static CKB_FIXED_MIN_CAPACITY = Ckb.CKB_FIXED_MIN_CAPACITY
 
   // all ckbs it gets
   capacity: bigint
@@ -22,8 +20,8 @@ export class SwapSellTransformation implements Transformation {
     this.skip = false
   }
 
-  static validate(_cell: Cell) {
-    return true
+  public minCapacity():bigint{
+    return Ckb.calcMinCapacity(this.request.originalUserLock)
   }
 
   process(): void {

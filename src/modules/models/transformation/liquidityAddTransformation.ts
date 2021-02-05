@@ -40,15 +40,26 @@ export class LiquidityAddTransformation implements Transformation {
     this.skip = false
   }
 
+  public minCapacityForSudtChange():bigint{
+    return Sudt.calcMinCapacity(this.request.originalUserLock) + Lpt.calcMinCapacity(this.request.originalUserLock)
+  }
+
+
+  public minCapacityForCkbChange():bigint{
+    return Ckb.calcMinCapacity(this.request.originalUserLock) + Lpt.calcMinCapacity(this.request.originalUserLock)
+  }
+
   process(): void {
     if (!this.processed) {
       this.outputLpt = Lpt.from(this.lptAmount, this.request.originalUserLock)
       if (this.sudtChangeAmount === 0n) {
+        // compose ckb
         this.outputSudtOrCkb = Ckb.from(
-          this.capacityChangeAmount - Lpt.LPT_FIXED_CAPACITY,
+          this.capacityChangeAmount - Lpt.calcMinCapacity( this.request.originalUserLock),
           this.request.originalUserLock,
         )
       } else {
+        // compose sudt
         this.outputSudtOrCkb = Sudt.from(this.sudtChangeAmount, this.request.originalUserLock)
       }
     }

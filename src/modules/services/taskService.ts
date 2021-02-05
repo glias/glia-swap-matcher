@@ -19,6 +19,9 @@ import { SwapSellTransformation } from '../models/transformation/swapSellTransfo
 import { LiquidityInitTransformation } from '../models/transformation/liquidityInitTransformation'
 import JSONbig from 'json-bigint'
 
+const jsonbig = JSONbig({ useNativeBigInt: true,alwaysParseAsBig:true})
+
+
 @injectable()
 export default class TaskService {
   readonly #scanService: ScanService
@@ -105,43 +108,64 @@ export default class TaskService {
     const dealRes: Deal | null = await this.#dealService.getByTxHash(info.outPoint.tx_hash)
 
     if (!dealRes) {
-      // the info is not in our deal, some one cuts off our deals, or maybe we are new to the pair
-
-      // get all deal txs we sent
-      let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
-
-      if (sentDeals.length) {
-        let sent_deals_txHashes = sentDeals.map(deal => deal.txHash)
-        // get all status of our sent deal txs and update them
-        // some maybe set to committed
-        // some maybe set to cut-off, if there are no res of a tx, that means it is cut off
-        let sentDealsStatus = await this.#rpcService.getTxsStatus(sent_deals_txHashes)
-        await this.#dealService.updateDealsStatus(sentDealsStatus)
-
-        sentDeals = await this.#dealService.getAllSentDeals()
-      }
-
-      // based on the current situation, do a new matching job
-      // check sent txs, because although the we lose domination, but we may have composed txs
-
-      await this.continue(sentDeals,addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
+      // are lose the leading advantage
+      await this.compete(addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
 
     } else {
-      // the info is in our deal tx, we dominate the matching
-
-      // 1st, the deals includes the info.txHash and all previous is definitely committed
-      // update all the tx and its pre-txs to committed
-      await this.#dealService.updateDealTxsChainsToCommited(dealRes)
-
-      // 2nd, get the latest sent deal by sort 'id'
-      let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
-
-      await this.continue(sentDeals,addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
+      // yes, we are dominating the info-chain
+      await this.dominate(dealRes,addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
     }
   }
 
-  continue = async (sentDeals: Array<Deal>,
-                    addXforms: Array<LiquidityAddTransformation>,
+  compete = async (addXforms: Array<LiquidityAddTransformation>,
+                   removeXforms:Array<LiquidityRemoveTransformation>,
+                   sellXforms:Array<SwapSellTransformation>,
+                   buyXforms:Array<SwapBuyTransformation>,
+                   info:Info,
+                   pool:Pool,
+                   matcherChange:MatcherChange) =>{
+    // we lose the control of info cell chain
+
+    // 1 first we check if we have derive the info
+    // if yes, keep all the derivatives to sent naturally and update all others to committed or cut-off
+    let directDerivative :Array<Deal>= await this.#dealService.getAllDerivates(info.outPoint.tx_hash)
+    let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
+    let oldDeals = sentDeals.filter(deal =>{
+      return !directDerivative.includes(deal)
+    })
+    if (oldDeals.length) {
+      let oldDealsTxHashes = oldDeals.map(deal => deal.txHash)
+      let oldDealsStatus = await this.#rpcService.getTxsStatus(oldDealsTxHashes)
+      await this.#dealService.updateDealsStatus(oldDealsStatus)
+    }
+
+    // 2 if there are derivatives, continue on it
+    // if not, base on the current info cell
+    await this.continue(addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
+  }
+
+
+  dominate = async(deal:Deal,
+                   addXforms: Array<LiquidityAddTransformation>,
+                   removeXforms:Array<LiquidityRemoveTransformation>,
+                   sellXforms:Array<SwapSellTransformation>,
+                   buyXforms:Array<SwapBuyTransformation>,
+                   info:Info,
+                   pool:Pool,
+                   matcherChange:MatcherChange) =>{
+    // the info is in our deal tx, we dominate the matching
+
+    // 1st, the deals includes the info.txHash and all previous is definitely committed
+    // update all the tx and its pre-txs to committed
+    await this.#dealService.updateDealTxsChainsToCommited(deal)
+
+    // 2nd, get the latest sent deal by sort 'id'
+
+    await this.continue(addXforms,removeXforms,sellXforms,buyXforms,info,pool,matcherChange)
+  }
+
+
+  continue = async (addXforms: Array<LiquidityAddTransformation>,
                     removeXforms:Array<LiquidityRemoveTransformation>,
                     sellXforms:Array<SwapSellTransformation>,
                     buyXforms:Array<SwapBuyTransformation>,
@@ -149,15 +173,19 @@ export default class TaskService {
                     pool:Pool,
                     matcherChange:MatcherChange) =>{
     // now we check Sent deals one by one to see if any input req are used by users
-
+    let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
+    let baseDeal :[Info,Pool,MatcherChange] | Deal= [info,pool,matcherChange]
     // map into the outpoint
     let xformReqOutpoints = [addXforms, removeXforms, buyXforms, sellXforms].flatMap(xforms => {
       // @ts-ignore
       return xforms.map(xform => xform.request.getOutPoint())
     })
 
+    // mark if some reqs are dropped by user
     let drop = false
     for (let sentDeal of sentDeals) {
+
+      // if some reqs are dropped, all following deals are useless
       if (drop) {
         this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
         continue
@@ -169,6 +197,7 @@ export default class TaskService {
       for (let sentReqOutpoint of sentReqOutpoints) {
         if (!xformReqOutpoints.includes(sentReqOutpoint)) {
           // the req is used buy client
+          this.#info(`a request of ${sentReqOutpoint} is missing/cancelled`)
           fine = false
           break
         }
@@ -176,23 +205,44 @@ export default class TaskService {
 
       if (fine) {
         // re-send the deal tx and remove those reqs in the request list
-        await this.#rpcService.sendTransaction(JSONbig.parse(sentDeal.tx))
+        await this.#rpcService.sendTransaction(jsonbig.parse(sentDeal.tx))
 
-        addXforms = addXforms.filter(addXform => !sentReqOutpoints.includes(addXform.request.getOutPoint()))
+        // eliminate xforms in the deal
+        addXforms = addXforms.filter(
+          addXform => !sentReqOutpoints.includes(addXform.request.getOutPoint())
+        )
         removeXforms = removeXforms.filter(
           removeXform => !sentReqOutpoints.includes(removeXform.request.getOutPoint()),
         )
-        buyXforms = buyXforms.filter(buyXform => !sentReqOutpoints.includes(buyXform.request.getOutPoint()))
-        sellXforms = sellXforms.filter(sellXform => !sentReqOutpoints.includes(sellXform.request.getOutPoint()))
+        buyXforms = buyXforms.filter(
+          buyXform => !sentReqOutpoints.includes(buyXform.request.getOutPoint())
+        )
+        sellXforms = sellXforms.filter(
+          sellXform => !sentReqOutpoints.includes(sellXform.request.getOutPoint())
+        )
+
+        // new match should base on this deal
+        baseDeal = sentDeal
       } else {
+        // at least one of the req this deal handles is missing
         // cut off this deal tx and those following it, do a new match
+        // and do cut off following deals too in next loops
         this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
         drop = true
       }
     }
-    // now do the matching job
+    // now do the matching job based on the based deal
     // if some deals is cut off, there likely to be a new match (reqs in the deals still remains), maybe not
-    await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
+    if(Array.isArray(baseDeal) ){
+      const base:[Info,Pool,MatcherChange] = baseDeal
+      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, base[0], base[1], base[2])
+    }else {
+      const info = Info.fromJSON(jsonbig.parse(baseDeal.info))
+      const pool = Pool.fromJSON(jsonbig.parse(baseDeal.pool))
+      const matcherChange = MatcherChange.fromJSON(jsonbig.parse(baseDeal.matcherChange))
+      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
+    }
+
   }
 
   handler = async (
@@ -236,10 +286,10 @@ export default class TaskService {
       const deal: Omit<Deal, 'createdAt' | 'id'> = {
         txHash: matchRecord.composedTxHash!,
         preTxHash: matchRecord.info.outPoint.tx_hash,
-        tx: JSONbig.stringify(matchRecord.composedTx),
-        info: JSONbig.stringify(matchRecord.info),
-        pool: JSONbig.stringify(matchRecord.pool),
-        matcherChange: JSONbig.stringify(matchRecord.matcherChange),
+        tx: jsonbig.stringify(matchRecord.composedTx),
+        info: jsonbig.stringify(matchRecord.info),
+        pool: jsonbig.stringify(matchRecord.pool),
+        matcherChange: jsonbig.stringify(matchRecord.matcherChange),
         reqOutpoints: outpointsProcessed.join(','),
         status: DealStatus.Sent,
       }
@@ -273,10 +323,10 @@ export default class TaskService {
     const deal: Omit<Deal, 'createdAt' | 'id'> = {
       txHash: matchRecord.composedTxHash!,
       preTxHash: matchRecord.info.outPoint.tx_hash,
-      tx: JSONbig.stringify(matchRecord.composedTx),
-      info: JSONbig.stringify(matchRecord.info),
-      pool: JSONbig.stringify(matchRecord.pool),
-      matcherChange: JSONbig.stringify(matchRecord.matcherChange),
+      tx: jsonbig.stringify(matchRecord.composedTx),
+      info: jsonbig.stringify(matchRecord.info),
+      pool: jsonbig.stringify(matchRecord.pool),
+      matcherChange: jsonbig.stringify(matchRecord.matcherChange),
       reqOutpoints: matchRecord.initXforms.request.getOutPoint(),
       status: DealStatus.Sent,
     }

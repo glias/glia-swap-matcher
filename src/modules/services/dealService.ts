@@ -26,8 +26,8 @@ export default class DealService {
   }
 
   getAllSentDeals = async (): Promise<Array<Deal>> => {
-    const ret =  await this.#dealRepository.getAllSentDeals()
-    return ret
+    return await this.#dealRepository.getAllSentDeals()
+
   }
 
   getByPreTxHash = async (preTxHash: string): Promise<Deal | null> => {
@@ -53,7 +53,7 @@ export default class DealService {
         txHash: txHash,
       })
   }
-
+  // only update Committed and Cut-off status
   updateDealsStatus = async (input: Array<[string, Omit<DealStatus, DealStatus.Sent>]>) => {
     let committed_deals: Array<string> = input
       .filter(([_txHash, status]) => {
@@ -64,7 +64,7 @@ export default class DealService {
       })
 
     if (committed_deals.length) {
-      this.#dealRepository
+      await this.#dealRepository
         .createQueryBuilder()
         .update(Deal)
         .set({
@@ -73,6 +73,7 @@ export default class DealService {
         .where({
           txHash: In(committed_deals),
         })
+        .execute()
     }
 
     let cut_off_deals: Array<string> = input
@@ -84,7 +85,7 @@ export default class DealService {
       })
 
     if (cut_off_deals.length) {
-      this.#dealRepository
+      await this.#dealRepository
         .createQueryBuilder()
         .update(Deal)
         .set({
@@ -93,6 +94,7 @@ export default class DealService {
         .where({
           txHash: In(cut_off_deals),
         })
+        .execute()
     }
   }
 
@@ -106,5 +108,20 @@ export default class DealService {
       // get the pre tx and recursive check if it need to be set Committed
       pointer = (await this.getByPreTxHash(pointer.preTxHash))!
     }
+  }
+
+  getAllDerivates = async (txHash:string) :Promise<Array<Deal>> => {
+    let derivatives : Array<Deal> =[]
+
+    let currentTxHash = txHash
+    while (true){
+      let derivative = await this.getByPreTxHash(currentTxHash)
+      if(derivative){
+        derivatives.push(derivative)
+        currentTxHash = derivative.txHash
+      }
+      break
+    }
+    return derivatives
   }
 }

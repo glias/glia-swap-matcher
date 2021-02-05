@@ -1,4 +1,3 @@
-import type { Cell } from '@ckb-lumos/base'
 import { LiquidityRemoveReq } from '../cells/liquidityRemoveReq'
 import { Sudt } from '../cells/sudt'
 import { Ckb } from '../cells/ckb'
@@ -15,8 +14,6 @@ matcher_in_cell(ckb)                    matcher_out_cell(ckb)
 export class LiquidityRemoveTransformation implements Transformation {
   // after process, this is the data for sudt_cell + ckb_cell
 
-  public static REMOVE_XFORM_FIXED_MIN_CAPACITY = Sudt.SUDT_FIXED_CAPACITY + Ckb.CKB_FIXED_MIN_CAPACITY
-
   // total sudt to return
   sudtAmount: bigint
   // total ckb to return, sudt cell capacity + ckb cell capacity
@@ -28,6 +25,7 @@ export class LiquidityRemoveTransformation implements Transformation {
 
   output_sudt?: Sudt
   output_ckb?: Ckb
+
   constructor(request: LiquidityRemoveReq) {
     this.request = request
     this.sudtAmount = 0n
@@ -36,14 +34,17 @@ export class LiquidityRemoveTransformation implements Transformation {
     this.skip = false
   }
 
-  static validate(_cell: Cell) {
-    return true
+  public minCapacity():bigint{
+    return Sudt.calcMinCapacity(this.request.originalUserLock) + Ckb.calcMinCapacity(this.request.originalUserLock)
   }
 
   process(): void {
     if (!this.processed) {
       this.output_sudt = Sudt.from(this.sudtAmount, this.request.originalUserLock)
-      this.output_ckb = Ckb.from(this.capacityAmount - Sudt.SUDT_FIXED_CAPACITY, this.request.originalUserLock)
+      this.output_ckb = Ckb.from(
+        this.capacityAmount - Sudt.calcMinCapacity(this.request.originalUserLock),
+        this.request.originalUserLock,
+      )
     }
     this.processed = true
   }

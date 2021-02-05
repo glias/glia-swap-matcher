@@ -3,8 +3,6 @@ import { defaultOutPoint, Uint64BigIntToHex } from '../../../utils/tools'
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
 import { BLOCK_MINER_FEE, MATCHER_LOCK_SCRIPT } from '../../../utils/envs'
-import { Ckb } from './ckb'
-import JSONbig from 'json-bigint'
 
 // for tips, matcherChange only hold ckbs
 // thought matcherChange is as same as Ckb, we give it a special class
@@ -35,7 +33,10 @@ export class MatcherChange implements CellInputType, CellOutputType {
   reduceBlockMinerFee = () => {
     this.capacity -= BLOCK_MINER_FEE
 
-    this.capacity = this.capacity < Ckb.CKB_FIXED_MIN_CAPACITY ? Ckb.CKB_FIXED_MIN_CAPACITY : this.capacity
+    if(this.capacity < MatcherChange.MATCHER_CHANGE_FIXED_CAPACITY){
+      console.log('MatcherChange is lower than MATCHER_CHANGE_FIXED_CAPACITY')
+      this.capacity = MatcherChange.MATCHER_CHANGE_FIXED_CAPACITY
+    }
   }
 
   static validate(cell: Cell): boolean {
@@ -63,12 +64,12 @@ export class MatcherChange implements CellInputType, CellOutputType {
     return new MatcherChange(0n, defaultOutPoint)
   }
 
-  static cloneWith(matcherChange: MatcherChange, txHash: string, index: string): MatcherChange {
+  /*static cloneWith(matcherChange: MatcherChange, txHash: string, index: string): MatcherChange {
     matcherChange = JSONbig.parse(JSONbig.stringify(matcherChange))
     matcherChange.outPoint.tx_hash = txHash
     matcherChange.outPoint.index = index
     return matcherChange
-  }
+  }*/
 
   toCellInput(): CKBComponents.CellInput {
     return {
@@ -94,5 +95,9 @@ export class MatcherChange implements CellInputType, CellOutputType {
 
   getOutPoint(): string {
     return `${this.outPoint.tx_hash}-${this.outPoint.index}`
+  }
+
+  static fromJSON(source: Object): MatcherChange {
+    return Object.assign(MatcherChange.default(), source);
   }
 }

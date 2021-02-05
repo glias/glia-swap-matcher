@@ -18,11 +18,11 @@ export class Deal {
   @PrimaryGeneratedColumn('increment', { name: 'id', type: 'integer' })
   id!: number
 
-  // this deal's tx hash
+  // this deal's tx hash, which also means the output info cell's outpoint
   @Column('varchar', { name: 'tx_hash' })
   txHash!: string
 
-  // easy for backwards retrieve
+  // easy for backwards retrieve, which also means the previous info cell's outpoint
   @Column('varchar', { name: 'pre_tx_hahs' })
   preTxHash!: string
 

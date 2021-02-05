@@ -23,10 +23,10 @@ const connectDatabase = async () => {
 const bootstrap = async () => {
   // register module
   const modulesDir = path.join(__dirname, 'modules')
-  const repositoriesDir = path.join(modulesDir, 'repositories')
+  //const repositoriesDir = path.join(modulesDir, 'repositories')
   const servicesDir = path.join(modulesDir, 'services')
 
-  for (let injectableDir of [repositoriesDir, servicesDir]) {
+  for (let injectableDir of [/*repositoriesDir,*/ servicesDir]) {
     const injectablePaths = await promisify(fs.readdir)(injectableDir, 'utf8').then(injectableNames =>
       injectableNames.map(injectableName => path.join(injectableDir, injectableName)),
     )

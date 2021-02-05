@@ -30,25 +30,30 @@ export default class RpcService {
   //   return await this.#client.getTipBlockNumber()
   // }
 
+  // this returns either committed or cut-off
   getTxsStatus = async (txHashes: Array<string>): Promise<Array<[string, Omit<DealStatus, DealStatus.Sent>]>> => {
     const requests: Array<['getTransaction', string]> = txHashes.map(hash => ['getTransaction', hash])
 
-    let results: Array<CKBComponents.TransactionWithStatus> = await this.#client.createBatchRequest(requests).exec()
+    // if the tx is cut-off, rpc will return null
+    let rpcResults: Array<CKBComponents.TransactionWithStatus> = await this.#client.createBatchRequest(requests).exec()
 
-    this.#info(`rpc batch getTransaction result: ${JSONbig.stringify(results)}`)
+    this.#info(`rpc batch getTransaction result: ${JSONbig.stringify(rpcResults)}`)
 
-    const ret: Array<[string, Omit<DealStatus, DealStatus.Sent>]> = txHashes.map((hash, index) => {
-      const result = results[index]
-      if (results[index] != null) {
-        if (hash !== result.transaction.hash) {
-          this.#error("that's impossible")
+    const ret: Array<[string, Omit<DealStatus, DealStatus.Sent>]> = txHashes.map(
+      (hash, index) => {
+        const rpcResult = rpcResults[index]
+
+
+        if (rpcResult != null) {
+          if (hash !== rpcResult.transaction.hash) {
+            this.#error('getTxsStatus, that\'s impossible')
+          }
+          const txRes: Omit<DealStatus, DealStatus.Sent> =
+            rpcResult.txStatus.status === 'committed' ? DealStatus.Committed : DealStatus.CutOff
+          return [hash, txRes]
         }
-        const txRes: Omit<DealStatus, DealStatus.Sent> =
-          result.txStatus.status === 'committed' ? DealStatus.Committed : DealStatus.CutOff
-        return [hash, txRes]
-      }
-      return [hash, DealStatus.CutOff]
-    })
+        return [hash, DealStatus.CutOff]
+      })
 
     return ret
   }
@@ -124,7 +129,7 @@ export default class RpcService {
     //console.log(logEntry)
 
     // @ts-ignore
-    const sender : Buffer = logEntry[1][2]
+    const sender: Buffer = logEntry[1][2]
 
     const senderEthAddress = prepare0xPrefix(sender.toString('hex').substring(24))
 

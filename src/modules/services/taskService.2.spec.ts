@@ -49,14 +49,12 @@ class MockScanService {
   getTip = jest.fn().mockResolvedValue(1n)
 }
 
-let getTxsStatusReturn: Array<[string, Omit<DealStatus, DealStatus.Sent>]>
-
+let getTxsStatusReturnStatus = DealStatus.Sent
 @injectable()
 class MockRpcService {
   getTxsStatus = jest.fn().mockImplementation((txHashes: Array<string>) => {
-    return Promise.resolve(
-      txHashes.map((hash) =>{[hash,DealStatus.Committed]})
-    )
+    const ret = txHashes.map((hash) =>{return [hash,getTxsStatusReturnStatus]})
+    return Promise.resolve(ret)
   })
   getLockScript = jest.fn().mockImplementation(() => {
     return null
@@ -117,14 +115,12 @@ describe('Test tasks module', () => {
     modules[MatcherService.name] = Symbol(MatcherService.name)
     modules[TransactionService.name] = Symbol(TransactionService.name)
     modules[TaskService.name] = Symbol(TaskService.name)
-    modules[DealRepository.name] = Symbol(DealRepository.name)
     container.bind(modules[ScanService.name]).to(MockScanService)
     container.bind(modules[DealService.name]).to(DealService)
     container.bind(modules[RpcService.name]).to(MockRpcService)
     container.bind(modules[MatcherService.name]).to(MatcherService)
     container.bind(modules[TransactionService.name]).to(TransactionService)
     container.bind(modules[TaskService.name]).to(TaskService)
-    container.bind(modules[DealRepository.name]).to(DealRepository)
 
     taskService = container.get(modules[TaskService.name])
     mockScanService = container.get(modules[ScanService.name])
@@ -156,7 +152,7 @@ describe('Test tasks module', () => {
 
     const ret = await dealService.getAllSentDeals()
 
-    console.log(ret)
+    await dealService.clearDb()
   })
 
   it('add liquidity', async () => {
@@ -203,16 +199,19 @@ describe('Test tasks module', () => {
       MatcherChange.default(),
     ]
 
+    getTxsStatusReturnStatus = DealStatus.Sent
+
     await taskService.task()
-    expect(handlerInit).toHaveBeenCalled()
+    console.log()
+    //expect(handlerInit).toHaveBeenCalled()
   })
 
 
 
-  it('one is pending and get one more', async () => {
+  it('one is pending and add one more', async () => {
 
     let deal = await dealService.getAllSentDeals()!
-
+    expect(deal.length).toEqual(1)
     scanAllReturn =[
       [
         new LiquidityAddTransformation(
@@ -276,6 +275,11 @@ describe('Test tasks module', () => {
 
     await taskService.task()
 
+    deal = await dealService.getAllSentDeals()!
+    expect(deal.length).toEqual(2)
   })
 
+  it('new request comes and old 2 reqs are committed', async () => {
+
+  })
 })

@@ -3,7 +3,6 @@ import { defaultOutPoint, leHexToBigIntUint128, Uint128BigIntToLeHex, Uint64BigI
 import { CellOutputType } from './interfaces/CellOutputType'
 import { CellInputType } from './interfaces/CellInputType'
 import { POOL_LOCK_SCRIPT, POOL_TYPE_SCRIPT } from '../../../utils/envs'
-import JSONbig from 'json-bigint'
 
 /*
 define POOL_BASE_CAPACITY =  186 * 10^8
@@ -62,12 +61,12 @@ export class Pool implements CellInputType, CellOutputType {
     return new Pool(0n, 0n, defaultOutPoint)
   }
 
-  static cloneWith(pool: Pool, txHash: string, index: string): Pool {
+  /*static cloneWith(pool: Pool, txHash: string, index: string): Pool {
     pool = JSONbig.parse(JSONbig.stringify(pool))
     pool.outPoint.tx_hash = txHash
     pool.outPoint.index = index
     return pool
-  }
+  }*/
 
   toCellInput(): CKBComponents.CellInput {
     return {
@@ -93,5 +92,9 @@ export class Pool implements CellInputType, CellOutputType {
 
   getOutPoint(): string {
     return `${this.outPoint.tx_hash}-${this.outPoint.index}`
+  }
+
+  static fromJSON(source: Object): Pool {
+    return Object.assign(Pool.default(), source);
   }
 }
