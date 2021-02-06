@@ -31,7 +31,7 @@ export class Sudt implements CellOutputType {
   }
 
   static default(): Sudt {
-    return new Sudt(0n, defaultScript)
+    return new Sudt(0n, defaultScript())
   }
 
   static calcMinCapacity(script : CKBComponents.Script):bigint{

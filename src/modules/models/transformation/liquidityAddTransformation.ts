@@ -17,7 +17,12 @@ matcher_in_cell(ckb)                    matcher_out_cell(ckb)
 [removed_liquidity_cell]                [sudt_cell + ckb_cell]
 [add_liquidity_cell]                    [liquidity_cell + (sudt_cell或者ckb_cell)]
  */
+
+type changeType = 'ckb'|'sudt'
+
 export class LiquidityAddTransformation implements Transformation {
+
+
   // for liquidity cell
   lptAmount: bigint
 
@@ -40,12 +45,20 @@ export class LiquidityAddTransformation implements Transformation {
     this.skip = false
   }
 
-  public minCapacityForSudtChange():bigint{
+  minCapacity(which: changeType): bigint {
+    if(which === 'ckb'){
+      return this.minCapacityForCkbChange()
+    }else{
+      return this.minCapacityForSudtChange()
+    }
+  }
+
+  private minCapacityForSudtChange():bigint{
     return Sudt.calcMinCapacity(this.request.originalUserLock) + Lpt.calcMinCapacity(this.request.originalUserLock)
   }
 
 
-  public minCapacityForCkbChange():bigint{
+  private minCapacityForCkbChange():bigint{
     return Ckb.calcMinCapacity(this.request.originalUserLock) + Lpt.calcMinCapacity(this.request.originalUserLock)
   }
 
@@ -81,4 +94,6 @@ export class LiquidityAddTransformation implements Transformation {
 
     return [this.outputLpt!.toCellOutputData(), this.outputSudtOrCkb!.toCellOutputData()]
   }
+
+
 }

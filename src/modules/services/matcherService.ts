@@ -255,7 +255,7 @@ export default class MatcherService {
     let ckbAvailable =
       liquidityAddXform.request.capacityAmount -
       liquidityAddXform.request.tips -
-      liquidityAddXform.minCapacityForSudtChange()
+      liquidityAddXform.minCapacity('sudt')
 
     if (ckbAvailable <= 0n) {
       this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash +
@@ -284,7 +284,7 @@ export default class MatcherService {
       matchRecord.matcherChange.capacity += liquidityAddXform.request.tips
 
       // of cause, because we drain all available ckbs and only leave these for hold cells
-      liquidityAddXform.capacityChangeAmount = liquidityAddXform.minCapacityForSudtChange()
+      liquidityAddXform.capacityChangeAmount = liquidityAddXform.minCapacity('sudt')
       liquidityAddXform.sudtChangeAmount = liquidityAddXform.request.sudtAmount - sudtNeeded
       liquidityAddXform.lptAmount = lptGot
 
@@ -317,7 +317,7 @@ export default class MatcherService {
       const ckbLeft = liquidityAddXform.request.capacityAmount - liquidityAddXform.request.tips - ckbNeeded
 
       // remaining ckbs should be enough to compose lpt cell and ckb cell
-      if (ckbLeft < liquidityAddXform.minCapacityForCkbChange()) {
+      if (ckbLeft < liquidityAddXform.minCapacity('ckb')) {
         // this shouldn't happens
         this.#info('process liquidity add, txHash: ' + liquidityAddXform.request.outPoint.tx_hash +
           ` ckbLeft ${ckbLeft}< Ckb.CKB_FIXED_MIN_CAPACITY + Lpt.LPT_FIXED_CAPACITY`)

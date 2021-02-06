@@ -61,7 +61,7 @@ export class MatcherChange implements CellInputType, CellOutputType {
   }
 
   static default(): MatcherChange {
-    return new MatcherChange(0n, defaultOutPoint)
+    return new MatcherChange(0n, defaultOutPoint())
   }
 
   /*static cloneWith(matcherChange: MatcherChange, txHash: string, index: string): MatcherChange {

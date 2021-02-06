@@ -25,7 +25,7 @@ export class Ckb implements CellOutputType {
   }
 
   static default(): Ckb {
-    return new Ckb(0n, defaultScript)
+    return new Ckb(0n, defaultScript())
   }
 
 

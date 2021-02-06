@@ -7,4 +7,5 @@ export interface Transformation extends CellInputGenerator, CellOutputGenerator 
   processed: boolean
   // skip this Transformation since the Transformation fails according to business logic
   skip: boolean
+  minCapacity(...x:[any]):bigint
 }

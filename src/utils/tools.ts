@@ -105,15 +105,19 @@ export function ckbBlake2b(hexStrings: Array<string>): string {
   return prepare0xPrefix(blake2bIns.final('hex') as string)
 }
 
-export const defaultOutPoint: OutPoint = {
-  tx_hash: '0x1111111111111111111111111111111111111111111111111111111111111111',
-  index: '0x0',
+export function defaultOutPoint(): OutPoint  {
+  return{
+    tx_hash: '0xdead111111111111111111111111111111111111111111111111111111111111',
+    index: '0x0',
+  }
 }
 
-export const defaultScript: CKBComponents.Script = {
-  args: '0x',
-  codeHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
-  hashType: 'data',
+export function defaultScript(): CKBComponents.Script {
+  return {
+    args: '0x',
+    codeHash: '0xdead000000000000000000000000000000000000000000000000000000000000',
+    hashType: 'data',
+  }
 }
 
 export function calcScriptLength(script: CKBComponents.Script) : bigint {

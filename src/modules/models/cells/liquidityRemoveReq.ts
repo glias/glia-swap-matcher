@@ -125,7 +125,7 @@ export class LiquidityRemoveReq implements CellInputType {
   }
 
   static default(): LiquidityRemoveReq {
-    return new LiquidityRemoveReq(0n, 0n, '', '', 0n, 0n, '', 0n, 0n, defaultScript, defaultOutPoint)
+    return new LiquidityRemoveReq(0n, 0n, '', '', 0n, 0n, '', 0n, 0n, defaultScript(), defaultOutPoint())
   }
 
   static validate(cell: Cell) {

@@ -43,7 +43,7 @@ export default class DealService {
   }
 
   updateDealStatus = async (txHash: string, status: DealStatus) => {
-    this.#dealRepository
+    await this.#dealRepository
       .createQueryBuilder()
       .update(Deal)
       .set({
@@ -52,6 +52,7 @@ export default class DealService {
       .where({
         txHash: txHash,
       })
+      .execute()
   }
   // only update Committed and Cut-off status
   updateDealsStatus = async (input: Array<[string, Omit<DealStatus, DealStatus.Sent>]>) => {
@@ -119,6 +120,7 @@ export default class DealService {
       if(derivative){
         derivatives.push(derivative)
         currentTxHash = derivative.txHash
+        continue
       }
       break
     }

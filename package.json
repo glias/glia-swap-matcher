@@ -18,12 +18,9 @@
     "start:usdc:prod": "cross-env NODE_ENV=production DOTENV_CONFIG_PATH=./configs/ckUSDC-Ckb.env node src/index.js",
     "start:usdt:prod": "cross-env NODE_ENV=production DOTENV_CONFIG_PATH=./configs/ckUSDT-Ckb.env node src/index.js",
     "start:dai:prod": "cross-env NODE_ENV=production DOTENV_CONFIG_PATH=./configs/ckDAI-Ckb.env node src/index.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "test": "cross-env DOTENV_CONFIG_PATH=./test.env NODE_ENV=test jest",
     "build:dev": "cross-env NODE_ENV=development yarn run tsc",
     "build:prod": "cross-env NODE_ENV=production yarn run tsc",
-    "build": "cross-env NODE_ENV=production yarn run tsc",
     "clean": "npx rimraf lib && npx rimraf tsconfig.tsbuildinfo && npx rimraf src/migrations",
     "format": "",
     "db:init:prod": "yarn run build:prod && typeorm migration:generate -c production -d src/migrations -n InitDb && yarn run build:prod && typeorm -c production migration:run"

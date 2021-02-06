@@ -32,7 +32,7 @@ export class Lpt implements CellOutputType{
   }
 
   static default(): Lpt {
-    return new Lpt(0n, defaultScript)
+    return new Lpt(0n, defaultScript())
   }
 
   static calcMinCapacity(script : CKBComponents.Script):bigint{

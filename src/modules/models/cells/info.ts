@@ -111,7 +111,7 @@ export class Info implements CellInputType, CellOutputType {
   }
 
   static default(): Info {
-    return new Info(0n, 0n, 0n, 0n, defaultOutPoint)
+    return new Info(0n, 0n, 0n, 0n, defaultOutPoint())
   }
 
   /*static cloneWith(info: Info, txHash: string, index: string): Info {

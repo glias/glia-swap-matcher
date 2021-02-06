@@ -124,7 +124,7 @@ export class LiquidityAddReq implements CellInputType {
   }
 
   static default(): LiquidityAddReq {
-    return new LiquidityAddReq(0n, 0n, '', '', 0n, 0n, '', 0n, 0n, defaultScript, defaultOutPoint)
+    return new LiquidityAddReq(0n, 0n, '', '', 0n, 0n, '', 0n, 0n, defaultScript(), defaultOutPoint())
   }
 
   static validate(cell: Cell) {

@@ -58,7 +58,7 @@ export class Pool implements CellInputType, CellOutputType {
   }
 
   static default(): Pool {
-    return new Pool(0n, 0n, defaultOutPoint)
+    return new Pool(0n, 0n, defaultOutPoint())
   }
 
   /*static cloneWith(pool: Pool, txHash: string, index: string): Pool {
