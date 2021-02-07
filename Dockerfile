@@ -11,9 +11,8 @@ ADD configs ./configs
 ADD swagger ./swagger/.
 
 RUN yarn install
-RUN yarn build
+RUN yarn build:dev
 
 EXPOSE 8080
-EXPOSE 8081
 
 CMD [ "npm", "run", "start:glia:dev" ]

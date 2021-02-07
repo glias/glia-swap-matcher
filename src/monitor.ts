@@ -38,5 +38,5 @@ export const kickupMonitor = () => {
   })
 
   const serverInstance = server.build()
-  serverInstance.listen(8081)
+  serverInstance.listen(8080)
 }
