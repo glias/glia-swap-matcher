@@ -120,6 +120,7 @@ export function defaultScript(): CKBComponents.Script {
   }
 }
 
+// return ckb size in shannon
 export function calcScriptLength(script: CKBComponents.Script) : bigint {
   return BigInt((remove0xPrefix(script.args).length/2 +33 )* 10 ** 8)
 }

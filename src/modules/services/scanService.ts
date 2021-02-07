@@ -83,8 +83,11 @@ export default class ScanService {
   > => {
     const tip = bigIntToHex(await this.getTip())
 
+    this.#info('scanReqs starts: ' + new Date())
     let [liquidityAddReqs, liquidityRemoveReqs, swapBuyReqs, swapSellReqs] = await this.scanReqs(tip)
+    this.#info('scanMatcherChange starts: ' + new Date())
     let matcherChange = await this.scanMatcherChange(tip)
+    this.#info('scanInfoCell starts: ' + new Date())
     let [info, pool] = await this.scanInfoCell(tip)
 
     let liquidityAddTransformations = liquidityAddReqs.map(req => new LiquidityAddTransformation(req))

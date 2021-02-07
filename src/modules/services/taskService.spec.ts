@@ -96,7 +96,6 @@ class MockTransactionService {
 
 describe('Test tasks module', () => {
   let taskService: TaskService
-  let mockScanService: MockScanService
   let dealService: DealService
   // let mockRpcService: MockRpcService
   // let mockMatcherService: MockMatcherService
@@ -125,7 +124,6 @@ describe('Test tasks module', () => {
     container.bind(modules[TaskService.name]).to(TaskService)
 
     taskService = container.get(modules[TaskService.name])
-    mockScanService = container.get(modules[ScanService.name])
     dealService = container.get(modules[DealService.name])
     // mockRpcService = container.get(modules[RpcService.name])
     // mockMatcherService = container.get(modules[MatcherService.name])

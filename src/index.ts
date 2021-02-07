@@ -5,6 +5,7 @@ import boostrap from './bootstrap'
 import { container, modules } from './container'
 import { logger } from './utils/logger'
 import TaskService from './modules/services/taskService'
+import { kickupMonitor } from './monitor'
 
 export default class GliaSwapMatcher {
   #ready = false
@@ -34,6 +35,12 @@ export default class GliaSwapMatcher {
     this.#log('Glia-Swap-Matcher is running under: ' + NODE_ENV)
 
     await this.#bootstrap()
+
+    if(NODE_ENV === 'development'){
+      this.#log('kick up monitor')
+      kickupMonitor()
+    }
+
     await GliaSwapMatcher.taskService.start()
     this.#log('started')
   }

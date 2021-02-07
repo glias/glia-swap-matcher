@@ -2,7 +2,7 @@ import { injectable } from 'inversify'
 import { getConnection, In } from 'typeorm'
 import DealRepository from '../repositories/deal.repository'
 import { Deal, DealStatus } from '../models/entities/deal.entity'
-import { NODE_ENV } from '../../utils/envs'
+import { TYPEORM_ENV,NODE_ENV } from '../../utils/envs'
 import { logger } from '../../utils/logger'
 
 @injectable()
@@ -10,7 +10,7 @@ export default class DealService {
   #dealRepository: DealRepository
 
   constructor() {
-    this.#dealRepository = getConnection(NODE_ENV).getCustomRepository(DealRepository)
+    this.#dealRepository = getConnection(TYPEORM_ENV).getCustomRepository(DealRepository)
   }
 
   #error = (msg: string) => {

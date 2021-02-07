@@ -8,10 +8,12 @@ ADD yarn.lock .
 ADD tsconfig.json .
 ADD src ./src
 ADD configs ./configs
+ADD swagger ./swagger/.
 
 RUN yarn install
 RUN yarn build
 
 EXPOSE 8080
+EXPOSE 8081
 
 CMD [ "npm", "run", "start:glia:dev" ]

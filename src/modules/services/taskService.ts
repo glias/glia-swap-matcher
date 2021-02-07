@@ -30,7 +30,7 @@ export default class TaskService {
   readonly #matcherService: MatcherService
   readonly #transactionService: TransactionService
 
-  readonly #schedule = '*/2 * * * * *'
+  readonly #schedule = '*/5 * * * * *'
 
   #cronLock: boolean = false
 
@@ -63,7 +63,10 @@ export default class TaskService {
     if (!this.#cronLock) {
       this.#cronLock = true
       try {
+        this.#info('task job starts: ' + new Date())
         await this.task()
+        this.#info('task job finishes: ' + new Date())
+
       } catch (e) {
         this.#error('task job error: ' + e)
       } finally {
@@ -74,7 +77,6 @@ export default class TaskService {
 
   // registered into cron job
   readonly task = async () => {
-    this.#info('task job: ' + new Date())
     // step 1, get latest info cell and scan all reqs
 
     // step 2
@@ -279,8 +281,6 @@ export default class TaskService {
 
       this.#transactionService.composeLiquidityInitTransaction(matchRecord)
 
-
-      return
     }else{
       matchRecord = new MatchRecord(
         info,

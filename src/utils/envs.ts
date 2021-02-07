@@ -3,6 +3,7 @@ import { blake160, privateKeyToPublicKey, scriptToHash } from '@nervosnetwork/ck
 import { HashType, QueryOptions } from '@ckb-lumos/base'
 import { ckbBlake2b, prepare0xPrefix, remove0xPrefix, scriptCamelToSnake } from './tools'
 import { logger } from './logger'
+import JSONbig from 'json-bigint'
 
 function log(msg: string) {
   logger.info(`${msg}`)
@@ -11,6 +12,8 @@ function log(msg: string) {
 const CKB_HEX: string = prepare0xPrefix(Buffer.from('ckb', 'utf-8').toString('hex'))
 
 export const NODE_ENV: string = process.env.NODE_ENV ? process.env.NODE_ENV : 'production'
+export const TYPEORM_PROFILE_MAME :string = process.env.TYPEORM_PROFILE_MAME!
+export const TYPEORM_ENV:string = `${NODE_ENV}-${TYPEORM_PROFILE_MAME!}`
 
 export const INDEXER_URL: string = process.env.INDEXER_URL!
 export const INDEXER_MYSQL_URL = process.env.INDEXER_MYSQL_URL!
@@ -180,7 +183,7 @@ export const LIQUIDITY_FROM_BLOCK = process.env.LIQUIDITY_FROM_BLOCK!
 export const LIQUIDITY_REQ_LOCK_SCRIPT_TX_HASH = process.env.LIQUIDITY_REQ_LOCK_SCRIPT_TX_HASH!
 export const LIQUIDITY_REQ_LOCK_SCRIPT_INDEX = process.env.LIQUIDITY_REQ_LOCK_SCRIPT_INDEX!
 export const LIQUIDITY_REQ_LOCK_CODE_HASH = process.env.LIQUIDITY_REQ_LOCK_CODE_HASH!
-export const LIQUIDITY_REQ_LOCK_HASH_TYPE: HashType = process.env.SUDT_CODE_HASH === 'type' ? 'type' : 'data'
+export const LIQUIDITY_REQ_LOCK_HASH_TYPE: HashType = process.env.LIQUIDITY_REQ_LOCK_HASH_TYPE === 'type' ? 'type' : 'data'
 export const LIQUIDITY_REQ_LOCK_ARGS_VERSION = process.env.LIQUIDITY_REQ_LOCK_ARGS_VERSION!
 export const LIQUIDITY_REQ_LOCK_ARGS = INFO_TYPE_SCRIPT_HASH + remove0xPrefix(LIQUIDITY_REQ_LOCK_ARGS_VERSION)
 
@@ -390,6 +393,14 @@ export const MATCHER_QUERY_OPTION: QueryOptions = {
     script: scriptCamelToSnake(MATCHER_LOCK_SCRIPT),
   },
 }
+
+log('INFO_QUERY_OPTION: ' + JSONbig.stringify(INFO_QUERY_OPTION,null,2))
+log('POOL_QUERY_OPTION: ' + JSONbig.stringify(POOL_QUERY_OPTION,null,2))
+log('LIQUIDITY_ADD_REQ_QUERY_OPTION: ' + JSONbig.stringify(LIQUIDITY_ADD_REQ_QUERY_OPTION,null,2))
+log('LIQUIDITY_REMOVE_REQ_QUERY_OPTION: ' + JSONbig.stringify(LIQUIDITY_REMOVE_REQ_QUERY_OPTION,null,2))
+log('SWAP_BUY_REQ_QUERY_OPTION: ' + JSONbig.stringify(SWAP_BUY_REQ_QUERY_OPTION,null,2))
+log('SWAP_SELL_REQ_QUERY_OPTION: ' + JSONbig.stringify(SWAP_SELL_REQ_QUERY_OPTION,null,2))
+log('MATCHER_QUERY_OPTION: ' + JSONbig.stringify(MATCHER_QUERY_OPTION,null,2))
 
 export const ALL_CELL_DEPS = [
   {

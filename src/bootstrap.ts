@@ -4,7 +4,7 @@ import { promisify } from 'util'
 import { createConnection } from 'typeorm'
 import { container, modules } from './container'
 import { logger } from './utils/logger'
-import { NODE_ENV } from './utils/envs'
+import { TYPEORM_ENV } from './utils/envs'
 
 const registerModule = async (modulePath: string) => {
   const { default: m } = await import(modulePath)
@@ -13,9 +13,13 @@ const registerModule = async (modulePath: string) => {
 }
 
 const connectDatabase = async () => {
-  const connection = await createConnection(NODE_ENV)
-  logger.debug(`database connected to ${connection.name}`)
-  return connection
+  try{
+    const connection = await createConnection(TYPEORM_ENV)
+    logger.info(`database connected to ${connection.name}`)
+    //return connection
+  }catch (e){
+    logger.error(e)
+  }
 }
 
 // register all ts files under modules with @injectable()
@@ -23,10 +27,10 @@ const connectDatabase = async () => {
 const bootstrap = async () => {
   // register module
   const modulesDir = path.join(__dirname, 'modules')
-  //const repositoriesDir = path.join(modulesDir, 'repositories')
+  const controllersDir = path.join(modulesDir, 'controllers')
   const servicesDir = path.join(modulesDir, 'services')
 
-  for (let injectableDir of [/*repositoriesDir,*/ servicesDir]) {
+  for (let injectableDir of [controllersDir, servicesDir]) {
     const injectablePaths = await promisify(fs.readdir)(injectableDir, 'utf8').then(injectableNames =>
       injectableNames.map(injectableName => path.join(injectableDir, injectableName)),
     )
