@@ -208,12 +208,15 @@ export default class RpcService {
     }
   }
 
-  sendTransaction = async (rawTx: CKBComponents.RawTransaction): Promise<void> => {
+  sendTransaction = async (rawTx: CKBComponents.RawTransaction): Promise<boolean> => {
     try {
       //this.#info('sendTransaction : ' + JSONbig.stringify(rawTx, null, 2))
       await this.#client.sendTransaction(rawTx)
+      return true
     } catch (e) {
       this.#error('sendTransaction error: ' + e)
+      this.#error('rawTx: '+JSONbig.stringify(rawTx,null,2))
+      return false
     }
   }
 

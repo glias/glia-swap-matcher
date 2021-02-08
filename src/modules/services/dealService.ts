@@ -100,7 +100,7 @@ export default class DealService {
   }
 
   // if a deal is already marked 'Committed', all its ancestors must be 'Committed'
-  updateDealTxsChainsToCommited = async (deal: Deal) => {
+  updateDealTxsChainsToCommitted = async (deal: Deal) => {
     let pointer: Deal = deal
     while (pointer.status == DealStatus.Sent) {
       pointer.status = DealStatus.Committed

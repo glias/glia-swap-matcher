@@ -18,9 +18,10 @@ import MatcherService from './matcherService'
 import TransactionService from './transactionService'
 import { LiquidityAddReq } from '../models/cells/liquidityAddReq'
 import { createConnection } from 'typeorm'
-import { NODE_ENV } from '../../utils/envs'
+import { NODE_ENV, TYPEORM_ENV } from '../../utils/envs'
 import { D1,D2,A1,A2,C1,C2,A5,A6,A8,A9,B1,req1, req2, req3 } from './taskService.info.spec'
 import JSONbig from 'json-bigint'
+import MonitorService from './monitorService'
 
 jest.setMock('../../utils/logger', {
   logger: winston.createLogger({
@@ -108,7 +109,7 @@ describe('Test tasks module', () => {
   const mark: bigint = 1234n
   beforeAll(async () => {
 
-    const connection = await createConnection(NODE_ENV)
+    const connection = await createConnection(TYPEORM_ENV)
 
     modules[ScanService.name] = Symbol(ScanService.name)
     modules[DealService.name] = Symbol(DealService.name)
@@ -116,12 +117,14 @@ describe('Test tasks module', () => {
     modules[MatcherService.name] = Symbol(MatcherService.name)
     modules[TransactionService.name] = Symbol(TransactionService.name)
     modules[TaskService.name] = Symbol(TaskService.name)
+    modules[MonitorService.name] = Symbol(MonitorService.name)
     container.bind(modules[ScanService.name]).to(MockScanService)
     container.bind(modules[DealService.name]).to(DealService)
     container.bind(modules[RpcService.name]).to(MockRpcService)
     container.bind(modules[MatcherService.name]).to(MatcherService)
     container.bind(modules[TransactionService.name]).to(TransactionService)
     container.bind(modules[TaskService.name]).to(TaskService)
+    container.bind(modules[MonitorService.name]).to(MonitorService)
 
     taskService = container.get(modules[TaskService.name])
     dealService = container.get(modules[DealService.name])
@@ -517,7 +520,7 @@ describe('Test tasks module', () => {
  D1 and D2 are committed,
  A1 and A2 are sent should be cutoff
  C1 is grabbed by competitor
- A5 and A6 is composed but opponent grabbed C2
+ A5 and A6 is composed but opponent grabbed C2, a.k.a. C2 is committed
  A8 is composed with req1 and A9 is composed with req2
  now receive req1 and req3, which means req2 is canceled and A9 should be cut off
  we should cut off all and compose B3 with req2

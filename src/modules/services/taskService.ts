@@ -165,7 +165,7 @@ export default class TaskService {
 
     // 1st, the deals includes the info.txHash and all previous is definitely committed
     // update all the tx and its pre-txs to committed
-    await this.#dealService.updateDealTxsChainsToCommited(deal)
+    await this.#dealService.updateDealTxsChainsToCommitted(deal)
 
     // 2nd, get the latest sent deal by sort 'id'
 
@@ -173,6 +173,9 @@ export default class TaskService {
   }
 
 
+  /*
+  we will not fork the tx chain, we will try utmost to derive a tx chain
+   */
   continue = async (addXforms: Array<LiquidityAddTransformation>,
                     removeXforms:Array<LiquidityRemoveTransformation>,
                     sellXforms:Array<SwapSellTransformation>,
@@ -182,7 +185,7 @@ export default class TaskService {
                     matcherChange:MatcherChange) =>{
     // now we check Sent deals one by one to see if any input req are used by users
     let sentDeals: Array<Deal> = await this.#dealService.getAllSentDeals()
-    let baseDeal :[Info,Pool,MatcherChange] | Deal= [info,pool,matcherChange]
+    let baseDeal :[Info,Pool,MatcherChange] = [info,pool,matcherChange]
     // map into the outpoint
     let xformReqOutpoints = [addXforms, removeXforms, buyXforms, sellXforms].flatMap(xforms => {
       // @ts-ignore
@@ -197,6 +200,20 @@ export default class TaskService {
       if (drop) {
         this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
         continue
+      }
+
+
+      const infoNew = Info.fromJSON(jsonbig.parse(sentDeal.info))
+      const poolNew = Pool.fromJSON(jsonbig.parse(sentDeal.pool))
+      const matcherChangeNew = MatcherChange.fromJSON(jsonbig.parse(sentDeal.matcherChange))
+
+      // first we make sure that the sent deal is the descendant of base deal
+      // usually, this shouldn't happen
+      if(sentDeal.preTxHash !== baseDeal[0].outPoint.tx_hash!){
+        // this maybe update a future committed tx to cutoff, but it doesn't matter
+        // it will be fixed by dominate() and updateDealTxsChainsToCommitted() inside of it
+        await this.#dealService.updateDealStatus(sentDeal.txHash, DealStatus.CutOff)
+        drop = true
       }
 
       let fine = true
@@ -230,7 +247,8 @@ export default class TaskService {
         )
 
         // new match should base on this deal
-        baseDeal = sentDeal
+
+        baseDeal = [infoNew,poolNew,matcherChangeNew]
       } else {
         // at least one of the req this deal handles is missing
         // cut off this deal tx and those following it, do a new match
@@ -241,15 +259,9 @@ export default class TaskService {
     }
     // now do the matching job based on the based deal
     // if some deals is cut off, there likely to be a new match (reqs in the deals still remains), maybe not
-    if(Array.isArray(baseDeal) ){
-      const base:[Info,Pool,MatcherChange] = baseDeal
-      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, base[0], base[1], base[2])
-    }else {
-      const info = Info.fromJSON(jsonbig.parse(baseDeal.info))
-      const pool = Pool.fromJSON(jsonbig.parse(baseDeal.pool))
-      const matcherChange = MatcherChange.fromJSON(jsonbig.parse(baseDeal.matcherChange))
-      await this.handler(addXforms, removeXforms, buyXforms, sellXforms, info, pool, matcherChange)
-    }
+
+    await this.handler(addXforms, removeXforms, buyXforms, sellXforms, baseDeal[0], baseDeal[1], baseDeal[2])
+
 
   }
 
@@ -305,7 +317,11 @@ export default class TaskService {
       outpointsProcessed = outpointsProcessed.concat(matchRecord.addXforms.map(xform => xform.request.getOutPoint()))
       outpointsProcessed = outpointsProcessed.concat(matchRecord.removeXforms.map(xform => xform.request.getOutPoint()))
 
-      await this.#rpcService.sendTransaction(matchRecord.composedTx!)
+      if(!await this.#rpcService.sendTransaction(matchRecord.composedTx!)){
+        // if send tx fails, don't record the composed tx
+        return
+      }
+
 
       // @ts-ignore
       const deal: Omit<Deal, 'createdAt' | 'id'> = {
